@@ -8,6 +8,12 @@ import {
   useState,
 } from "react";
 import { gestionaleApi } from "../services/api";
+import {
+  normalizeClienteInput,
+  normalizeModelloInput,
+  normalizePaeseInput,
+  normalizeRegioneInput,
+} from "../utils/textFormat";
 
 export interface Telefono {
   id: string;
@@ -25,6 +31,8 @@ export interface Cliente {
   dataNascita: string;
   via: string;
   paese: string;
+  provincia: string;
+  cap: string;
   regione: string;
   telefoni: Telefono[];
   dataUltimoOrdine?: string | null;
@@ -34,6 +42,22 @@ export interface Modello {
   id: string;
   nome: string;
   descrizione?: string | null;
+}
+
+export interface RegioneDizionario {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface PaeseDizionario {
+  id: string;
+  region_id?: string | null;
+  name: string;
+  province?: string | null;
+  postal_code?: string | null;
+  description?: string | null;
+  region?: RegioneDizionario | null;
 }
 
 export type TipoAllegato = "fattura" | "ordine" | "altro";
@@ -72,6 +96,16 @@ interface AppContextType {
   updateModello: (id: string, modello: Omit<Modello, "id">) => void;
   deleteModello: (id: string) => boolean;
   getModello: (id: string) => Modello | undefined;
+  regioni: RegioneDizionario[];
+  addRegione: (regione: Omit<RegioneDizionario, "id">) => void;
+  updateRegione: (id: string, regione: Omit<RegioneDizionario, "id">) => void;
+  deleteRegione: (id: string) => void;
+  getRegione: (id: string) => RegioneDizionario | undefined;
+  paesi: PaeseDizionario[];
+  addPaese: (paese: Omit<PaeseDizionario, "id">) => void;
+  updatePaese: (id: string, paese: Omit<PaeseDizionario, "id">) => void;
+  deletePaese: (id: string) => void;
+  getPaese: (id: string) => PaeseDizionario | undefined;
   ordini: Ordine[];
   addOrdine: (ordine: Omit<Ordine, "id">) => void;
   updateOrdine: (id: string, ordine: Omit<Ordine, "id">) => void;
@@ -96,29 +130,68 @@ function latestOrderDate(clienteId: string, orders: Ordine[]) {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => gestionaleApi.hasAuthToken());
   const [clienti, setClienti] = useState<Cliente[]>([]);
   const [modelli, setModelli] = useState<Modello[]>([]);
+  const [regioni, setRegioni] = useState<RegioneDizionario[]>([]);
+  const [paesi, setPaesi] = useState<PaeseDizionario[]>([]);
   const [ordini, setOrdini] = useState<Ordine[]>([]);
   const [remoteOrdiniCount, setRemoteOrdiniCount] = useState<Record<string, number>>({});
 
+  const resetData = useCallback(() => {
+    setClienti([]);
+    setModelli([]);
+    setRegioni([]);
+    setPaesi([]);
+    setOrdini([]);
+    setRemoteOrdiniCount({});
+  }, []);
+
   const refreshData = useCallback(async () => {
-    const [apiClienti, apiModelli, apiOrdini, apiCounts] = await Promise.all([
+    const [apiClienti, apiModelli, apiRegioni, apiPaesi, apiOrdini, apiCounts] = await Promise.all([
       gestionaleApi.fetchClienti(),
       gestionaleApi.fetchModelli(),
+      gestionaleApi.fetchRegions(),
+      gestionaleApi.fetchTowns(),
       gestionaleApi.fetchOrdini(),
       gestionaleApi.fetchOrdiniCountByCliente(),
     ]);
 
+    if (!gestionaleApi.hasAuthToken()) {
+      setIsAuthenticated(false);
+      resetData();
+      return;
+    }
+
     setClienti(apiClienti ?? []);
     setModelli(apiModelli ?? []);
+    setRegioni(apiRegioni ?? []);
+    setPaesi(apiPaesi ?? []);
     setOrdini(apiOrdini ?? []);
     setRemoteOrdiniCount(apiCounts ?? {});
-  }, []);
+  }, [resetData]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
     void refreshData();
-  }, [refreshData]);
+  }, [isAuthenticated, refreshData]);
+
+  useEffect(() => {
+    if (!gestionaleApi.hasAuthToken()) {
+      return;
+    }
+
+    void gestionaleApi.me().then((response) => {
+      if (!response?.authenticated) {
+        gestionaleApi.clearAuthToken();
+        setIsAuthenticated(false);
+        resetData();
+      }
+    });
+  }, [resetData]);
 
   const localOrdiniCount = useMemo(() => {
     return ordini.reduce<Record<string, number>>((acc, ordine) => {
@@ -135,9 +208,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const login = async (username: string, password: string) => {
     const apiResponse = await gestionaleApi.login(username, password);
 
-    if (apiResponse?.authenticated) {
+    if (apiResponse?.authenticated && apiResponse.token) {
+      gestionaleApi.setAuthToken(apiResponse.token);
       setIsAuthenticated(true);
-      void refreshData();
+      await refreshData();
       return true;
     }
 
@@ -145,15 +219,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    void gestionaleApi.logout();
     setIsAuthenticated(false);
-    setClienti([]);
-    setModelli([]);
-    setOrdini([]);
-    setRemoteOrdiniCount({});
+    resetData();
   };
 
   const addCliente = (cliente: Omit<Cliente, "id">) => {
-    void gestionaleApi.createCliente(cliente).then((savedCliente) => {
+    const normalizedCliente = normalizeClienteInput(cliente);
+
+    void gestionaleApi.createCliente(normalizedCliente).then((savedCliente) => {
       if (savedCliente) {
         setClienti((current) => [...current, savedCliente]);
       }
@@ -161,7 +235,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateCliente = (id: string, cliente: Omit<Cliente, "id">) => {
-    void gestionaleApi.updateCliente(id, cliente).then((savedCliente) => {
+    const normalizedCliente = normalizeClienteInput(cliente);
+
+    void gestionaleApi.updateCliente(id, normalizedCliente).then((savedCliente) => {
       if (savedCliente) {
         setClienti((current) => current.map((item) => (item.id === id ? savedCliente : item)));
       }
@@ -189,7 +265,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const addModello = (modello: Omit<Modello, "id">) => {
-    void gestionaleApi.createModello(modello).then((savedModello) => {
+    const normalizedModello = normalizeModelloInput(modello);
+
+    void gestionaleApi.createModello(normalizedModello).then((savedModello) => {
       if (savedModello) {
         setModelli((current) => [...current, savedModello]);
       }
@@ -197,7 +275,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateModello = (id: string, modello: Omit<Modello, "id">) => {
-    void gestionaleApi.updateModello(id, modello).then((savedModello) => {
+    const normalizedModello = normalizeModelloInput(modello);
+
+    void gestionaleApi.updateModello(id, normalizedModello).then((savedModello) => {
       if (savedModello) {
         setModelli((current) => current.map((item) => (item.id === id ? savedModello : item)));
       }
@@ -218,6 +298,71 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getModello = useCallback(
     (id: string) => modelli.find((modello) => modello.id === id),
     [modelli]
+  );
+
+  const addRegione = (regione: Omit<RegioneDizionario, "id">) => {
+    const normalizedRegione = normalizeRegioneInput(regione);
+
+    void gestionaleApi.createRegion(normalizedRegione).then((savedRegione) => {
+      if (savedRegione) {
+        setRegioni((current) => [...current, savedRegione]);
+      }
+    });
+  };
+
+  const updateRegione = (id: string, regione: Omit<RegioneDizionario, "id">) => {
+    const normalizedRegione = normalizeRegioneInput(regione);
+
+    void gestionaleApi.updateRegion(id, normalizedRegione).then((savedRegione) => {
+      if (savedRegione) {
+        setRegioni((current) => current.map((item) => (item.id === id ? savedRegione : item)));
+      }
+    });
+  };
+
+  const deleteRegione = (id: string) => {
+    setRegioni((current) => current.filter((regione) => regione.id !== id));
+    setPaesi((current) =>
+      current.map((paese) =>
+        paese.region_id === id ? { ...paese, region_id: null, region: null } : paese
+      )
+    );
+    void gestionaleApi.deleteRegion(id);
+  };
+
+  const getRegione = useCallback(
+    (id: string) => regioni.find((regione) => regione.id === id),
+    [regioni]
+  );
+
+  const addPaese = (paese: Omit<PaeseDizionario, "id">) => {
+    const normalizedPaese = normalizePaeseInput(paese);
+
+    void gestionaleApi.createTown(normalizedPaese).then((savedPaese) => {
+      if (savedPaese) {
+        setPaesi((current) => [...current, savedPaese]);
+      }
+    });
+  };
+
+  const updatePaese = (id: string, paese: Omit<PaeseDizionario, "id">) => {
+    const normalizedPaese = normalizePaeseInput(paese);
+
+    void gestionaleApi.updateTown(id, normalizedPaese).then((savedPaese) => {
+      if (savedPaese) {
+        setPaesi((current) => current.map((item) => (item.id === id ? savedPaese : item)));
+      }
+    });
+  };
+
+  const deletePaese = (id: string) => {
+    setPaesi((current) => current.filter((paese) => paese.id !== id));
+    void gestionaleApi.deleteTown(id);
+  };
+
+  const getPaese = useCallback(
+    (id: string) => paesi.find((paese) => paese.id === id),
+    [paesi]
   );
 
   const addOrdine = (ordine: Omit<Ordine, "id">) => {
@@ -285,6 +430,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateModello,
         deleteModello,
         getModello,
+        regioni,
+        addRegione,
+        updateRegione,
+        deleteRegione,
+        getRegione,
+        paesi,
+        addPaese,
+        updatePaese,
+        deletePaese,
+        getPaese,
         ordini,
         addOrdine,
         updateOrdine,

@@ -16,6 +16,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('region_id')->nullable()->constrained('regions')->nullOnDelete();
             $table->string('name')->nullable()->index();
+            $table->string('province')->nullable()->index();
+            $table->string('postal_code', 20)->nullable()->index();
             $table->text('description')->nullable();
             $table->timestamps();
             $table->softDeletes();

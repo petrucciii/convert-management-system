@@ -14,6 +14,8 @@ class Town extends Model
     protected $fillable = [
         'region_id',
         'name',
+        'province',
+        'postal_code',
         'description',
     ];
 

@@ -12,6 +12,15 @@ import { useApp } from "../context/AppContext";
 
 type ZoneKey = "paese" | "regione";
 
+function getYear(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.getFullYear().toString();
+}
+
 export function Statistiche() {
   const { ordini, modelli, getCliente, getModello } = useApp();
   const currentYear = new Date().getFullYear().toString();
@@ -20,7 +29,10 @@ export function Statistiche() {
   const years = useMemo(() => {
     const yearsSet = new Set<string>([currentYear]);
     ordini.forEach((ordine) => {
-      yearsSet.add(new Date(ordine.dataOrdine).getFullYear().toString());
+      const year = getYear(ordine.dataOrdine);
+      if (year) {
+        yearsSet.add(year);
+      }
     });
     return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
   }, [currentYear, ordini]);
@@ -30,9 +42,7 @@ export function Statistiche() {
       return ordini;
     }
 
-    return ordini.filter(
-      (ordine) => new Date(ordine.dataOrdine).getFullYear().toString() === selectedYear
-    );
+    return ordini.filter((ordine) => getYear(ordine.dataOrdine) === selectedYear);
   }, [ordini, selectedYear]);
 
   const topModelli = useMemo(() => {

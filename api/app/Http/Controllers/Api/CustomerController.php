@@ -9,6 +9,7 @@ use App\Models\Town;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class CustomerController extends Controller
 {
@@ -72,12 +73,12 @@ class CustomerController extends Controller
     {
         return [
             'town_id' => $this->resolveTownId($request),
-            'first_name' => $this->stringValue($request, ['nome', 'first_name']),
-            'last_name' => $this->stringValue($request, ['cognome', 'last_name']),
-            'vat_number' => $this->stringValue($request, ['partitaIva', 'partita_iva', 'vat_number']),
-            'fiscal_code' => $this->stringValue($request, ['codiceFiscale', 'codice_fiscale', 'fiscal_code']),
+            'first_name' => $this->titleValue($request, ['nome', 'first_name']),
+            'last_name' => $this->titleValue($request, ['cognome', 'last_name']),
+            'vat_number' => $this->upperValue($request, ['partitaIva', 'partita_iva', 'vat_number']),
+            'fiscal_code' => $this->upperValue($request, ['codiceFiscale', 'codice_fiscale', 'fiscal_code']),
             'birth_date' => $this->stringValue($request, ['dataNascita', 'data_nascita', 'birth_date']),
-            'address' => $this->stringValue($request, ['via', 'address']),
+            'address' => $this->titleValue($request, ['via', 'address']),
             'notes' => $this->stringValue($request, ['notes', 'note']),
         ];
     }
@@ -89,10 +90,12 @@ class CustomerController extends Controller
             return (int) $townId;
         }
 
-        $regionName = $this->stringValue($request, ['regione', 'region', 'region.name']);
-        $townName = $this->stringValue($request, ['paese', 'town', 'town.name']);
+        $regionName = $this->upperValue($request, ['regione', 'region', 'region.name']);
+        $townName = $this->titleValue($request, ['paese', 'town', 'town.name']);
+        $province = $this->upperValue($request, ['provincia', 'province']);
+        $postalCode = $this->upperValue($request, ['cap', 'postal_code']);
 
-        if ($townName === null && $regionName === null) {
+        if ($townName === null && $regionName === null && $province === null && $postalCode === null) {
             return null;
         }
 
@@ -105,6 +108,8 @@ class CustomerController extends Controller
             ->firstOrCreate([
                 'region_id' => $region?->id,
                 'name' => $townName,
+                'province' => $province,
+                'postal_code' => $postalCode,
             ])
             ->id;
     }
@@ -123,9 +128,15 @@ class CustomerController extends Controller
                 continue;
             }
 
+            $phoneNumber = $this->nullableString($phone['numero'] ?? $phone['phone_number'] ?? null);
+            $label = $this->nullableString($phone['label'] ?? null);
+            if ($phoneNumber === null && $label === null) {
+                continue;
+            }
+
             $customer->phones()->create([
-                'phone_number' => $this->nullableString($phone['numero'] ?? $phone['phone_number'] ?? null),
-                'label' => $this->nullableString($phone['label'] ?? null),
+                'phone_number' => $phoneNumber,
+                'label' => $label,
                 'is_primary' => array_key_exists('principale', $phone)
                     ? (bool) $phone['principale']
                     : (array_key_exists('is_primary', $phone) ? (bool) $phone['is_primary'] : null),
@@ -151,6 +162,8 @@ class CustomerController extends Controller
             'dataNascita' => optional($customer->birth_date)->format('Y-m-d') ?? '',
             'via' => $customer->address ?? '',
             'paese' => $customer->town?->name ?? '',
+            'provincia' => $customer->town?->province ?? '',
+            'cap' => $customer->town?->postal_code ?? '',
             'regione' => $customer->town?->region?->name ?? '',
             'telefoni' => $customer->phones
                 ->map(fn ($phone): array => [
@@ -179,6 +192,20 @@ class CustomerController extends Controller
         }
 
         return null;
+    }
+
+    private function titleValue(Request $request, array $keys): ?string
+    {
+        $value = $this->stringValue($request, $keys);
+
+        return $value === null ? null : Str::of($value)->lower()->title()->toString();
+    }
+
+    private function upperValue(Request $request, array $keys): ?string
+    {
+        $value = $this->stringValue($request, $keys);
+
+        return $value === null ? null : Str::upper($value);
     }
 
     private function nullableString(mixed $value): ?string

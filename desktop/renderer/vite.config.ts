@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react'
 function figmaAssetResolver() {
   return {
     name: 'figma-asset-resolver',
-    resolveId(id) {
+    resolveId(id: any) {
       if (id.startsWith('figma:asset/')) {
         const filename = id.replace('figma:asset/', '')
         return path.resolve(__dirname, 'src/assets', filename)
@@ -33,8 +33,8 @@ export default defineConfig({
 
   server: {
     proxy: {
-      '/api': 'http://127.0.0.1:8000',
-      '/storage': 'http://127.0.0.1:8000',
+      '/api': 'http://gestionale.test',
+      '/storage': 'http://gestionale.test',
     },
   },
 

@@ -4,6 +4,8 @@ import { ArrowLeft, Download, ExternalLink, FileText, Trash2, Upload } from "luc
 import { toast } from "sonner";
 import { AllegatoOrdine, TipoAllegato, useApp } from "../context/AppContext";
 
+const MAX_ATTACHMENTS = 3;
+
 function createAttachmentId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return `allegato-${crypto.randomUUID()}`;
@@ -55,9 +57,15 @@ export function OrdineForm() {
   const validate = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!dataOrdine) newErrors.dataOrdine = "La data ordine e obbligatoria";
-    if (!selectedClienteId) newErrors.clienteId = "Il cliente e obbligatorio";
-    if (!modelloId) newErrors.modelloId = "Il modello e obbligatorio";
+    if (dataOrdine && Number.isNaN(new Date(dataOrdine).getTime())) {
+      newErrors.dataOrdine = "La data ordine non e valida";
+    }
+    if (selectedClienteId && secondaPersonaId && selectedClienteId === secondaPersonaId) {
+      newErrors.secondaPersonaId = "La seconda persona deve essere diversa dal cliente principale";
+    }
+    if (allegati.length > MAX_ATTACHMENTS) {
+      newErrors.allegati = `Puoi caricare al massimo ${MAX_ATTACHMENTS} allegati`;
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -66,6 +74,12 @@ export function OrdineForm() {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     if (files.length === 0) {
+      return;
+    }
+
+    if (allegati.length + files.length > MAX_ATTACHMENTS) {
+      toast.error(`Puoi caricare al massimo ${MAX_ATTACHMENTS} allegati per ordine`);
+      event.target.value = "";
       return;
     }
 
@@ -81,6 +95,7 @@ export function OrdineForm() {
     }));
 
     setAllegati((current) => [...current, ...uploadedAttachments]);
+    setErrors((current) => ({ ...current, allegati: "" }));
     event.target.value = "";
     toast.success(`${files.length} allegato/i caricato/i`);
   };
@@ -102,7 +117,7 @@ export function OrdineForm() {
     event.preventDefault();
 
     if (!validate()) {
-      toast.error("Compila tutti i campi obbligatori");
+      toast.error("Controlla i dati inseriti");
       return;
     }
 
@@ -122,7 +137,9 @@ export function OrdineForm() {
       toast.success("Ordine creato con successo");
     }
 
-    navigate(`/clienti/${clienteId || selectedClienteId}`);
+    navigate(
+      clienteId || selectedClienteId ? `/clienti/${clienteId || selectedClienteId}` : "/clienti"
+    );
   };
 
   const goBack = () => {
@@ -169,7 +186,7 @@ export function OrdineForm() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Data ordine *
+                Data ordine
               </label>
               <input
                 type="date"
@@ -192,7 +209,7 @@ export function OrdineForm() {
             {!clienteId && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cliente principale *
+                  Cliente principale
                 </label>
                 <select
                   value={selectedClienteId}
@@ -221,7 +238,7 @@ export function OrdineForm() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Modello ordinato *
+                Modello ordinato
               </label>
               <select
                 value={modelloId}
@@ -253,7 +270,10 @@ export function OrdineForm() {
               </label>
               <select
                 value={secondaPersonaId}
-                onChange={(event) => setSecondaPersonaId(event.target.value)}
+                onChange={(event) => {
+                  setSecondaPersonaId(event.target.value);
+                  setErrors((current) => ({ ...current, secondaPersonaId: "" }));
+                }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
               >
                 <option value="">Nessuna</option>
@@ -265,6 +285,9 @@ export function OrdineForm() {
                     </option>
                   ))}
               </select>
+              {errors.secondaPersonaId && (
+                <p className="text-red-600 text-sm mt-1">{errors.secondaPersonaId}</p>
+              )}
             </div>
           </div>
         </div>
@@ -283,6 +306,7 @@ export function OrdineForm() {
               <input type="file" multiple className="hidden" onChange={handleFileUpload} />
             </label>
           </div>
+          {errors.allegati && <p className="text-sm text-red-600 mb-4">{errors.allegati}</p>}
 
           {allegati.length > 0 ? (
             <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg">

@@ -17,6 +17,8 @@ export function ClienteForm() {
   const [dataNascita, setDataNascita] = useState("");
   const [via, setVia] = useState("");
   const [paese, setPaese] = useState("");
+  const [provincia, setProvincia] = useState("");
+  const [cap, setCap] = useState("");
   const [regione, setRegione] = useState("");
   const [telefoni, setTelefoni] = useState<Telefono[]>([
     { id: "1", numero: "", principale: true },
@@ -34,6 +36,8 @@ export function ClienteForm() {
         setDataNascita(cliente.dataNascita);
         setVia(cliente.via);
         setPaese(cliente.paese);
+        setProvincia(cliente.provincia);
+        setCap(cliente.cap);
         setRegione(cliente.regione);
         setTelefoni(cliente.telefoni);
       }
@@ -48,11 +52,6 @@ export function ClienteForm() {
   };
 
   const removeTelefono = (telefonoId: string) => {
-    if (telefoni.length === 1) {
-      toast.error("Deve esserci almeno un telefono");
-      return;
-    }
-
     const removed = telefoni.find((telefono) => telefono.id === telefonoId);
     const nextTelefoni = telefoni.filter((telefono) => telefono.id !== telefonoId);
     if (removed?.principale && nextTelefoni.length > 0) {
@@ -78,21 +77,9 @@ export function ClienteForm() {
   const validate = () => {
     const newErrors: Record<string, string> = {};
 
-    // I campi geografici sono separati per filtrare e aggregare in Laravel/statistiche.
-    if (!nome.trim()) newErrors.nome = "Il nome e obbligatorio";
-    if (!cognome.trim()) newErrors.cognome = "Il cognome e obbligatorio";
-    if (!partitaIva.trim()) newErrors.partitaIva = "La partita IVA e obbligatoria";
-    if (!codiceFiscale.trim()) newErrors.codiceFiscale = "Il codice fiscale e obbligatorio";
-    if (!dataNascita) newErrors.dataNascita = "La data di nascita e obbligatoria";
-    if (!via.trim()) newErrors.via = "La via e obbligatoria";
-    if (!paese.trim()) newErrors.paese = "Il paese e obbligatorio";
-    if (!regione.trim()) newErrors.regione = "La regione e obbligatoria";
-
-    telefoni.forEach((telefono, index) => {
-      if (!telefono.numero.trim()) {
-        newErrors[`telefono-${index}`] = "Il numero di telefono e obbligatorio";
-      }
-    });
+    if (dataNascita && new Date(dataNascita).getTime() > Date.now()) {
+      newErrors.dataNascita = "La data di nascita non puo essere futura";
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -102,7 +89,7 @@ export function ClienteForm() {
     event.preventDefault();
 
     if (!validate()) {
-      toast.error("Compila tutti i campi obbligatori");
+      toast.error("Controlla i dati inseriti");
       return;
     }
 
@@ -114,6 +101,8 @@ export function ClienteForm() {
       dataNascita,
       via,
       paese,
+      provincia,
+      cap,
       regione,
       telefoni,
       dataUltimoOrdine: isEdit && id ? getCliente(id)?.dataUltimoOrdine : undefined,
@@ -160,7 +149,7 @@ export function ClienteForm() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Dati anagrafici</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nome *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nome</label>
               <input
                 type="text"
                 value={nome}
@@ -174,7 +163,7 @@ export function ClienteForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Cognome *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Cognome</label>
               <input
                 type="text"
                 value={cognome}
@@ -189,7 +178,7 @@ export function ClienteForm() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Data di nascita *
+                Data di nascita
               </label>
               <input
                 type="date"
@@ -211,7 +200,7 @@ export function ClienteForm() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Dati fiscali</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Partita IVA *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Partita IVA</label>
               <input
                 type="text"
                 value={partitaIva}
@@ -228,7 +217,7 @@ export function ClienteForm() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Codice fiscale *
+                Codice fiscale
               </label>
               <input
                 type="text"
@@ -250,7 +239,7 @@ export function ClienteForm() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Indirizzo</h2>
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div className="md:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Via *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Via</label>
               <input
                 type="text"
                 value={via}
@@ -264,7 +253,7 @@ export function ClienteForm() {
             </div>
 
             <div className="md:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Paese *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Paese</label>
               <input
                 type="text"
                 value={paese}
@@ -277,8 +266,38 @@ export function ClienteForm() {
               {errors.paese && <p className="text-red-600 text-sm mt-1">{errors.paese}</p>}
             </div>
 
-            <div className="md:col-span-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Regione *</label>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Provincia</label>
+              <input
+                type="text"
+                value={provincia}
+                onChange={(event) => {
+                  setProvincia(event.target.value);
+                  setErrors((current) => ({ ...current, provincia: "" }));
+                }}
+                className={inputClass("provincia")}
+              />
+              {errors.provincia && (
+                <p className="text-red-600 text-sm mt-1">{errors.provincia}</p>
+              )}
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">CAP</label>
+              <input
+                type="text"
+                value={cap}
+                onChange={(event) => {
+                  setCap(event.target.value);
+                  setErrors((current) => ({ ...current, cap: "" }));
+                }}
+                className={inputClass("cap")}
+              />
+              {errors.cap && <p className="text-red-600 text-sm mt-1">{errors.cap}</p>}
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Regione</label>
               <input
                 type="text"
                 value={regione}
@@ -337,7 +356,7 @@ export function ClienteForm() {
                   />
                   Principale
                 </label>
-                {telefoni.length > 1 && (
+                {telefoni.length > 0 && (
                   <button
                     type="button"
                     onClick={() => removeTelefono(telefono.id)}

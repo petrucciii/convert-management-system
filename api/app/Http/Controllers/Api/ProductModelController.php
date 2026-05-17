@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ProductModel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class ProductModelController extends Controller
 {
@@ -54,8 +55,8 @@ class ProductModelController extends Controller
     private function modelData(Request $request): array
     {
         return [
-            'name' => $this->nullableString($request->input('nome', $request->input('name'))),
-            'description' => $this->nullableString($request->input('descrizione', $request->input('description'))),
+            'name' => $this->upperString($request->input('nome', $request->input('name'))),
+            'description' => $this->upperString($request->input('descrizione', $request->input('description'))),
             'is_active' => $request->has('is_active') ? (bool) $request->input('is_active') : null,
         ];
     }
@@ -78,5 +79,12 @@ class ProductModelController extends Controller
         $value = trim((string) $value);
 
         return $value === '' ? null : $value;
+    }
+
+    private function upperString(mixed $value): ?string
+    {
+        $value = $this->nullableString($value);
+
+        return $value === null ? null : Str::upper($value);
     }
 }

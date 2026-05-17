@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Town;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class TownController extends Controller
 {
@@ -14,6 +15,7 @@ class TownController extends Controller
         return response()->json(
             Town::query()
                 ->with('region')
+                ->orderBy('province')
                 ->orderBy('name')
                 ->get()
                 ->map(fn (Town $town): array => $this->toArray($town))
@@ -50,7 +52,9 @@ class TownController extends Controller
     {
         return [
             'region_id' => $this->nullableInt($request->input('region_id')),
-            'name' => $this->nullableString($request->input('name', $request->input('nome'))),
+            'name' => $this->titleString($request->input('name', $request->input('nome'))),
+            'province' => $this->upperString($request->input('province', $request->input('provincia'))),
+            'postal_code' => $this->upperString($request->input('postal_code', $request->input('cap'))),
             'description' => $this->nullableString($request->input('description', $request->input('descrizione'))),
         ];
     }
@@ -61,6 +65,8 @@ class TownController extends Controller
             'id' => (string) $town->id,
             'region_id' => $town->region_id ? (string) $town->region_id : null,
             'name' => $town->name,
+            'province' => $town->province,
+            'postal_code' => $town->postal_code,
             'description' => $town->description,
             'region' => $town->region ? [
                 'id' => (string) $town->region->id,
@@ -88,5 +94,19 @@ class TownController extends Controller
         $value = trim((string) $value);
 
         return $value === '' ? null : $value;
+    }
+
+    private function titleString(mixed $value): ?string
+    {
+        $value = $this->nullableString($value);
+
+        return $value === null ? null : Str::of($value)->lower()->title()->toString();
+    }
+
+    private function upperString(mixed $value): ?string
+    {
+        $value = $this->nullableString($value);
+
+        return $value === null ? null : Str::upper($value);
     }
 }

@@ -6,8 +6,26 @@ import { toast } from "sonner";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { useApp } from "../context/AppContext";
 
-type SortColumn = "nome" | "cognome" | "paese" | "dataUltimoOrdine" | "numOrdini";
+type SortColumn = "nome" | "cognome" | "paese" | "provincia" | "dataUltimoOrdine" | "numOrdini";
 type SortOrder = "asc" | "desc";
+
+function getYear(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.getFullYear().toString();
+}
+
+function getTimestamp(value?: string | null) {
+  if (!value) {
+    return 0;
+  }
+
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
 
 export function Clienti() {
   const navigate = useNavigate();
@@ -32,6 +50,8 @@ export function Clienti() {
           cliente.codiceFiscale,
           cliente.via,
           cliente.paese,
+          cliente.provincia,
+          cliente.cap,
           cliente.regione,
         ].some((value) => value.toLowerCase().includes(term))
       );
@@ -39,8 +59,7 @@ export function Clienti() {
 
     if (yearFilter) {
       result = result.filter((cliente) => {
-        if (!cliente.dataUltimoOrdine) return false;
-        return new Date(cliente.dataUltimoOrdine).getFullYear().toString() === yearFilter;
+        return getYear(cliente.dataUltimoOrdine) === yearFilter;
       });
     }
 
@@ -60,9 +79,13 @@ export function Clienti() {
         compareA = a.paese.toLowerCase();
         compareB = b.paese.toLowerCase();
       }
+      if (sortBy === "provincia") {
+        compareA = a.provincia.toLowerCase();
+        compareB = b.provincia.toLowerCase();
+      }
       if (sortBy === "dataUltimoOrdine") {
-        compareA = a.dataUltimoOrdine ? new Date(a.dataUltimoOrdine).getTime() : 0;
-        compareB = b.dataUltimoOrdine ? new Date(b.dataUltimoOrdine).getTime() : 0;
+        compareA = getTimestamp(a.dataUltimoOrdine);
+        compareB = getTimestamp(b.dataUltimoOrdine);
       }
       if (sortBy === "numOrdini") {
         compareA = getNumeroOrdiniCliente(a.id);
@@ -77,11 +100,21 @@ export function Clienti() {
     return result;
   }, [clienti, getNumeroOrdiniCliente, searchTerm, sortBy, sortOrder, yearFilter]);
 
+  const formatOrderDate = (value?: string | null) => {
+    if (!value) {
+      return "Mai";
+    }
+
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "Mai" : format(date, "dd/MM/yyyy");
+  };
+
   const years = useMemo(() => {
     const yearsSet = new Set<string>();
     clienti.forEach((cliente) => {
-      if (cliente.dataUltimoOrdine) {
-        yearsSet.add(new Date(cliente.dataUltimoOrdine).getFullYear().toString());
+      const year = getYear(cliente.dataUltimoOrdine);
+      if (year) {
+        yearsSet.add(year);
       }
     });
     return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
@@ -161,7 +194,7 @@ export function Clienti() {
               <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Cerca nome, cognome, CF, P.IVA, paese, regione..."
+                placeholder="Cerca nome, cognome, CF, P.IVA, paese, provincia, regione..."
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
@@ -192,6 +225,8 @@ export function Clienti() {
                 <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">P. IVA</th>
                 <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">Via</th>
                 <SortHeader column="paese" label="Paese" />
+                <SortHeader column="provincia" label="Prov." />
+                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">CAP</th>
                 <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">Regione</th>
                 <SortHeader column="dataUltimoOrdine" label="Ultimo ordine" />
                 <SortHeader column="numOrdini" label="Ordini" />
@@ -215,11 +250,11 @@ export function Clienti() {
                   <td className="py-4 px-5 text-sm text-gray-600">{cliente.partitaIva}</td>
                   <td className="py-4 px-5 text-sm text-gray-600">{cliente.via}</td>
                   <td className="py-4 px-5 text-sm text-gray-600">{cliente.paese}</td>
+                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.provincia}</td>
+                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.cap}</td>
                   <td className="py-4 px-5 text-sm text-gray-600">{cliente.regione}</td>
                   <td className="py-4 px-5 text-sm text-gray-600">
-                    {cliente.dataUltimoOrdine
-                      ? format(new Date(cliente.dataUltimoOrdine), "dd/MM/yyyy")
-                      : "Mai"}
+                    {formatOrderDate(cliente.dataUltimoOrdine)}
                   </td>
                   <td className="py-4 px-5 text-sm text-gray-900">
                     {getNumeroOrdiniCliente(cliente.id)}

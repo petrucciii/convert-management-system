@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -21,28 +22,40 @@ class AuthController extends Controller
             ->first();
 
         if ($user && Hash::check($password, $user->password)) {
-            return response()->json([
-                'authenticated' => true,
-                'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                ],
-            ]);
-        }
+            $token = Str::random(64);
+            $user->forceFill(['api_token' => $token])->save();
 
-        // Bootstrap locale: permette di entrare prima di creare utenti reali.
-        if (User::query()->doesntExist() && $username === 'admin' && $password === 'admin') {
             return response()->json([
                 'authenticated' => true,
-                'user' => [
-                    'id' => null,
-                    'name' => 'Admin locale',
-                    'email' => null,
-                ],
+                'token' => $token,
+                'user' => $this->userPayload($user),
             ]);
         }
 
         return response()->json(['authenticated' => false], 401);
+    }
+
+    public function me(Request $request): JsonResponse
+    {
+        return response()->json([
+            'authenticated' => true,
+            'user' => $this->userPayload($request->user()),
+        ]);
+    }
+
+    public function logout(Request $request): JsonResponse
+    {
+        $request->user()?->forceFill(['api_token' => null])->save();
+
+        return response()->json(null, 204);
+    }
+
+    private function userPayload(?User $user): array
+    {
+        return [
+            'id' => $user?->id,
+            'name' => $user?->name,
+            'email' => $user?->email,
+        ];
     }
 }

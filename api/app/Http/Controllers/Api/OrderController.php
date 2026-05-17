@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Storage;
 
 class OrderController extends Controller
 {
+    private const MAX_ATTACHMENTS = 3;
+
     public function index(): JsonResponse
     {
         $orders = Order::query()
@@ -24,6 +26,10 @@ class OrderController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        if ($this->hasTooManyAttachments($request)) {
+            return $this->tooManyAttachmentsResponse();
+        }
+
         $order = Order::query()->create($this->orderData($request));
 
         $this->syncItems($order, $request);
@@ -39,6 +45,10 @@ class OrderController extends Controller
 
     public function update(Request $request, Order $order): JsonResponse
     {
+        if ($this->hasTooManyAttachments($request)) {
+            return $this->tooManyAttachmentsResponse();
+        }
+
         $order->update($this->orderData($request));
 
         if ($this->hasItemPayload($request)) {
@@ -164,6 +174,22 @@ class OrderController extends Controller
             }
             $query->delete();
         }
+    }
+
+    private function hasTooManyAttachments(Request $request): bool
+    {
+        if (! $this->hasAttachmentPayload($request)) {
+            return false;
+        }
+
+        return max(count($this->attachmentMetas($request)), count($this->attachmentFiles($request))) > self::MAX_ATTACHMENTS;
+    }
+
+    private function tooManyAttachmentsResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Ogni ordine puo avere al massimo tre allegati.',
+        ], 422);
     }
 
     private function createAttachment(Order $order, UploadedFile $file, array $meta): int

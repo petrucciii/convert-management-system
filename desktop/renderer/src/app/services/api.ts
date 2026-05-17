@@ -1,7 +1,8 @@
-import type { Cliente, Modello, Ordine } from "../context/AppContext";
+import type { Cliente, Modello, Ordine, PaeseDizionario, RegioneDizionario } from "../context/AppContext";
 
 // Endpoint relativi: Laravel puo essere montato dietro lo stesso host/proxy senza hardcodare URL.
 const API_PREFIX = "/api";
+const AUTH_TOKEN_KEY = "convert_api_token";
 
 type ApiCountItem = {
   clienteId?: string;
@@ -13,7 +14,38 @@ type ApiCountItem = {
 type ApiLoginResponse = {
   authenticated?: boolean;
   token?: string;
+  user?: {
+    id?: number | string | null;
+    name?: string | null;
+    email?: string | null;
+  };
 };
+
+function getStoredToken() {
+  if (typeof localStorage === "undefined") {
+    return null;
+  }
+
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+function setStoredToken(token: string) {
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  }
+}
+
+function clearStoredToken() {
+  if (typeof localStorage !== "undefined") {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
+
+function authHeaders() {
+  const token = getStoredToken();
+
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T | null> {
   try {
@@ -23,10 +55,16 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T | null
       ...init,
       headers: {
         Accept: "application/json",
+        ...authHeaders(),
         ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...init?.headers,
       },
     });
+
+    if (response.status === 401) {
+      clearStoredToken();
+      return null;
+    }
 
     if (response.status === 204 || response.status === 404) {
       return null;
@@ -60,8 +98,10 @@ function serializeOrderFormData(ordine: Omit<Ordine, "id">) {
     formData.append("seconda_persona_id", ordine.secondaPersonaId);
   }
 
-  ordine.allegati.forEach((allegato, index) => {
-    formData.append(`allegati_meta[${index}][id]`, allegato.id);
+  ordine.allegati.slice(0, 3).forEach((allegato, index) => {
+    if (/^\d+$/.test(allegato.id)) {
+      formData.append(`allegati_meta[${index}][id]`, allegato.id);
+    }
     formData.append(`allegati_meta[${index}][nome]`, allegato.nome);
     formData.append(`allegati_meta[${index}][tipo]`, allegato.tipo);
 
@@ -96,11 +136,31 @@ function normalizeCountResponse(response: Record<string, number> | ApiCountItem[
 }
 
 export const gestionaleApi = {
+  hasAuthToken() {
+    return !!getStoredToken();
+  },
+
+  setAuthToken(token: string) {
+    setStoredToken(token);
+  },
+
+  clearAuthToken() {
+    clearStoredToken();
+  },
+
   login(username: string, password: string) {
     return apiRequest<ApiLoginResponse>("/login", {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
+  },
+
+  me() {
+    return apiRequest<ApiLoginResponse>("/me");
+  },
+
+  logout() {
+    return apiRequest("/logout", { method: "POST" }).finally(clearStoredToken);
   },
 
   fetchClienti() {
@@ -145,6 +205,50 @@ export const gestionaleApi = {
 
   deleteModello(id: string) {
     return apiRequest(`/modelli/${id}`, { method: "DELETE" });
+  },
+
+  fetchRegions() {
+    return apiRequest<RegioneDizionario[]>("/regions");
+  },
+
+  createRegion(regione: Omit<RegioneDizionario, "id">) {
+    return apiRequest<RegioneDizionario>("/regions", {
+      method: "POST",
+      body: JSON.stringify(regione),
+    });
+  },
+
+  updateRegion(id: string, regione: Omit<RegioneDizionario, "id">) {
+    return apiRequest<RegioneDizionario>(`/regions/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(regione),
+    });
+  },
+
+  deleteRegion(id: string) {
+    return apiRequest(`/regions/${id}`, { method: "DELETE" });
+  },
+
+  fetchTowns() {
+    return apiRequest<PaeseDizionario[]>("/towns");
+  },
+
+  createTown(paese: Omit<PaeseDizionario, "id">) {
+    return apiRequest<PaeseDizionario>("/towns", {
+      method: "POST",
+      body: JSON.stringify(paese),
+    });
+  },
+
+  updateTown(id: string, paese: Omit<PaeseDizionario, "id">) {
+    return apiRequest<PaeseDizionario>(`/towns/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(paese),
+    });
+  },
+
+  deleteTown(id: string) {
+    return apiRequest(`/towns/${id}`, { method: "DELETE" });
   },
 
   fetchOrdini() {

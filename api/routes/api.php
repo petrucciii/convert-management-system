@@ -10,16 +10,21 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('login', [AuthController::class, 'login']);
 
-Route::get('clienti/ordini-count', [CustomerController::class, 'orderCounts']);
+Route::middleware('api.token')->group(function (): void {
+    Route::get('me', [AuthController::class, 'me']);
+    Route::post('logout', [AuthController::class, 'logout']);
 
-Route::apiResource('clienti', CustomerController::class)
-    ->parameters(['clienti' => 'customer']);
+    Route::get('clienti/ordini-count', [CustomerController::class, 'orderCounts']);
 
-Route::apiResource('modelli', ProductModelController::class)
-    ->parameters(['modelli' => 'productModel']);
+    Route::apiResource('clienti', CustomerController::class)
+        ->parameters(['clienti' => 'customer']);
 
-Route::apiResource('ordini', OrderController::class)
-    ->parameters(['ordini' => 'order']);
+    Route::apiResource('modelli', ProductModelController::class)
+        ->parameters(['modelli' => 'productModel']);
 
-Route::apiResource('regions', RegionController::class);
-Route::apiResource('towns', TownController::class);
+    Route::apiResource('ordini', OrderController::class)
+        ->parameters(['ordini' => 'order']);
+
+    Route::apiResource('regions', RegionController::class);
+    Route::apiResource('towns', TownController::class);
+});

@@ -79,8 +79,7 @@ export function ClienteDetail() {
 
   const removeTelefono = (telefonoId: string) => {
     setDraftCliente((current) => {
-      if (!current || current.telefoni.length === 1) {
-        toast.error("Deve esserci almeno un telefono");
+      if (!current) {
         return current;
       }
 
@@ -111,22 +110,9 @@ export function ClienteDetail() {
   const validateDraft = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!draftCliente.nome.trim()) newErrors.nome = "Il nome e obbligatorio";
-    if (!draftCliente.cognome.trim()) newErrors.cognome = "Il cognome e obbligatorio";
-    if (!draftCliente.partitaIva.trim()) newErrors.partitaIva = "La partita IVA e obbligatoria";
-    if (!draftCliente.codiceFiscale.trim()) {
-      newErrors.codiceFiscale = "Il codice fiscale e obbligatorio";
+    if (draftCliente.dataNascita && new Date(draftCliente.dataNascita).getTime() > Date.now()) {
+      newErrors.dataNascita = "La data di nascita non puo essere futura";
     }
-    if (!draftCliente.dataNascita) newErrors.dataNascita = "La data di nascita e obbligatoria";
-    if (!draftCliente.via.trim()) newErrors.via = "La via e obbligatoria";
-    if (!draftCliente.paese.trim()) newErrors.paese = "Il paese e obbligatorio";
-    if (!draftCliente.regione.trim()) newErrors.regione = "La regione e obbligatoria";
-
-    draftCliente.telefoni.forEach((telefono, index) => {
-      if (!telefono.numero.trim()) {
-        newErrors[`telefono-${index}`] = "Il numero e obbligatorio";
-      }
-    });
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -134,7 +120,7 @@ export function ClienteDetail() {
 
   const handleSaveCliente = () => {
     if (!validateDraft()) {
-      toast.error("Controlla i campi obbligatori");
+      toast.error("Controlla i dati inseriti");
       return;
     }
 
@@ -163,6 +149,15 @@ export function ClienteDetail() {
     `w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 ${
       errors[name] ? "border-red-300 focus:ring-red-500" : "border-gray-300 focus:ring-slate-500"
     }`;
+
+  const formatOrderDate = (value: string) => {
+    if (!value) {
+      return "-";
+    }
+
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "-" : format(date, "dd/MM/yyyy");
+  };
 
   const renderTelefono = (telefono: Telefono, index: number) => (
     <div key={telefono.id} className="flex items-center gap-3">
@@ -194,7 +189,7 @@ export function ClienteDetail() {
         />
         Principale
       </label>
-      {draftCliente.telefoni.length > 1 && (
+      {draftCliente.telefoni.length > 0 && (
         <button
           type="button"
           onClick={() => removeTelefono(telefono.id)}
@@ -226,7 +221,7 @@ export function ClienteDetail() {
                 {cliente.nome} {cliente.cognome}
               </h1>
               <p className="text-gray-600 mt-1">
-                {cliente.paese} - {cliente.regione}
+                {[cliente.paese, cliente.provincia, cliente.regione].filter(Boolean).join(" - ")}
               </p>
             </div>
             <div className="flex gap-2">
@@ -280,7 +275,7 @@ export function ClienteDetail() {
                 <h2 className="text-lg font-semibold text-gray-900">Dati personali</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Nome *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Nome</label>
                     <input
                       type="text"
                       value={draftCliente.nome}
@@ -291,7 +286,7 @@ export function ClienteDetail() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Cognome *
+                      Cognome
                     </label>
                     <input
                       type="text"
@@ -305,7 +300,7 @@ export function ClienteDetail() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Data di nascita *
+                      Data di nascita
                     </label>
                     <input
                       type="date"
@@ -325,7 +320,7 @@ export function ClienteDetail() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Partita IVA *
+                      Partita IVA
                     </label>
                     <input
                       type="text"
@@ -339,7 +334,7 @@ export function ClienteDetail() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Codice fiscale *
+                      Codice fiscale
                     </label>
                     <input
                       type="text"
@@ -358,7 +353,7 @@ export function ClienteDetail() {
                 <h2 className="text-lg font-semibold text-gray-900">Indirizzo</h2>
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                   <div className="md:col-span-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Via *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Via</label>
                     <input
                       type="text"
                       value={draftCliente.via}
@@ -368,7 +363,7 @@ export function ClienteDetail() {
                     {errors.via && <p className="text-red-600 text-sm mt-1">{errors.via}</p>}
                   </div>
                   <div className="md:col-span-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Paese *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Paese</label>
                     <input
                       type="text"
                       value={draftCliente.paese}
@@ -379,9 +374,33 @@ export function ClienteDetail() {
                       <p className="text-red-600 text-sm mt-1">{errors.paese}</p>
                     )}
                   </div>
-                  <div className="md:col-span-6">
+                  <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Regione *
+                      Provincia
+                    </label>
+                    <input
+                      type="text"
+                      value={draftCliente.provincia}
+                      onChange={(event) => updateDraftField("provincia", event.target.value)}
+                      className={inputClass("provincia")}
+                    />
+                    {errors.provincia && (
+                      <p className="text-red-600 text-sm mt-1">{errors.provincia}</p>
+                    )}
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">CAP</label>
+                    <input
+                      type="text"
+                      value={draftCliente.cap}
+                      onChange={(event) => updateDraftField("cap", event.target.value)}
+                      className={inputClass("cap")}
+                    />
+                    {errors.cap && <p className="text-red-600 text-sm mt-1">{errors.cap}</p>}
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Regione
                     </label>
                     <input
                       type="text"
@@ -457,7 +476,7 @@ export function ClienteDetail() {
                     return (
                       <tr key={ordine.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="py-3 px-4 text-sm text-gray-900">
-                          {format(new Date(ordine.dataOrdine), "dd/MM/yyyy")}
+                          {formatOrderDate(ordine.dataOrdine)}
                         </td>
                         <td className="py-3 px-4 text-sm text-gray-900">
                           {modello?.nome || "N/A"}
