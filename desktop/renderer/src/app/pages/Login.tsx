@@ -16,7 +16,7 @@ export function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Prima validazione lato client, poi login AJAX con fallback locale admin/admin.
+    // Prima validazione lato client, poi login AJAX verso Laravel.
     const newErrors: { username?: string; password?: string } = {};
     if (!username.trim()) {
       newErrors.username = "Il campo username e obbligatorio";

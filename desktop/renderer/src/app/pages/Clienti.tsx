@@ -32,8 +32,6 @@ export function Clienti() {
           cliente.codiceFiscale,
           cliente.via,
           cliente.paese,
-          cliente.provincia,
-          cliente.cap,
           cliente.regione,
         ].some((value) => value.toLowerCase().includes(term))
       );
@@ -163,7 +161,7 @@ export function Clienti() {
               <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Cerca nome, cognome, CF, P.IVA, paese, provincia..."
+                placeholder="Cerca nome, cognome, CF, P.IVA, paese, regione..."
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
@@ -194,10 +192,7 @@ export function Clienti() {
                 <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">P. IVA</th>
                 <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">Via</th>
                 <SortHeader column="paese" label="Paese" />
-                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">
-                  Provincia
-                </th>
-                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">CAP</th>
+                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">Regione</th>
                 <SortHeader column="dataUltimoOrdine" label="Ultimo ordine" />
                 <SortHeader column="numOrdini" label="Ordini" />
                 <th className="text-right py-3 px-5 text-sm font-medium text-gray-700">
@@ -220,8 +215,7 @@ export function Clienti() {
                   <td className="py-4 px-5 text-sm text-gray-600">{cliente.partitaIva}</td>
                   <td className="py-4 px-5 text-sm text-gray-600">{cliente.via}</td>
                   <td className="py-4 px-5 text-sm text-gray-600">{cliente.paese}</td>
-                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.provincia}</td>
-                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.cap}</td>
+                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.regione}</td>
                   <td className="py-4 px-5 text-sm text-gray-600">
                     {cliente.dataUltimoOrdine
                       ? format(new Date(cliente.dataUltimoOrdine), "dd/MM/yyyy")

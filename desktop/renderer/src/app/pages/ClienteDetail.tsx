@@ -120,8 +120,6 @@ export function ClienteDetail() {
     if (!draftCliente.dataNascita) newErrors.dataNascita = "La data di nascita e obbligatoria";
     if (!draftCliente.via.trim()) newErrors.via = "La via e obbligatoria";
     if (!draftCliente.paese.trim()) newErrors.paese = "Il paese e obbligatorio";
-    if (!draftCliente.provincia.trim()) newErrors.provincia = "La provincia e obbligatoria";
-    if (!draftCliente.cap.trim()) newErrors.cap = "Il CAP e obbligatorio";
     if (!draftCliente.regione.trim()) newErrors.regione = "La regione e obbligatoria";
 
     draftCliente.telefoni.forEach((telefono, index) => {
@@ -228,7 +226,7 @@ export function ClienteDetail() {
                 {cliente.nome} {cliente.cognome}
               </h1>
               <p className="text-gray-600 mt-1">
-                {cliente.paese} ({cliente.provincia}) - {cliente.regione}
+                {cliente.paese} - {cliente.regione}
               </p>
             </div>
             <div className="flex gap-2">
@@ -381,34 +379,7 @@ export function ClienteDetail() {
                       <p className="text-red-600 text-sm mt-1">{errors.paese}</p>
                     )}
                   </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Provincia *
-                    </label>
-                    <input
-                      type="text"
-                      value={draftCliente.provincia}
-                      onChange={(event) =>
-                        updateDraftField("provincia", event.target.value.toUpperCase())
-                      }
-                      className={inputClass("provincia")}
-                      maxLength={2}
-                    />
-                    {errors.provincia && (
-                      <p className="text-red-600 text-sm mt-1">{errors.provincia}</p>
-                    )}
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">CAP *</label>
-                    <input
-                      type="text"
-                      value={draftCliente.cap}
-                      onChange={(event) => updateDraftField("cap", event.target.value)}
-                      className={inputClass("cap")}
-                    />
-                    {errors.cap && <p className="text-red-600 text-sm mt-1">{errors.cap}</p>}
-                  </div>
-                  <div className="md:col-span-2">
+                  <div className="md:col-span-6">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Regione *
                     </label>

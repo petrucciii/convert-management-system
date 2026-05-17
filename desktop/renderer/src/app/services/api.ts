@@ -43,8 +43,8 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T | null
 
     return (await response.json()) as T;
   } catch (error) {
-    // L'app continua con i dati locali finche il backend Laravel non e collegato.
-    console.info("API Laravel non raggiungibile, uso stato locale.", error);
+    // Nessun fallback statico: se Laravel non risponde, la UI resta vuota o mostra errore.
+    console.info("API Laravel non raggiungibile.", error);
     return null;
   }
 }
@@ -54,7 +54,7 @@ function serializeOrderFormData(ordine: Omit<Ordine, "id">) {
 
   formData.append("cliente_id", ordine.clienteId);
   formData.append("data_ordine", ordine.dataOrdine);
-  formData.append("modello_id", ordine.modelloId);
+  formData.append("product_model_id", ordine.modelloId);
 
   if (ordine.secondaPersonaId) {
     formData.append("seconda_persona_id", ordine.secondaPersonaId);
@@ -166,9 +166,19 @@ export const gestionaleApi = {
   },
 
   updateOrdine(id: string, ordine: Omit<Ordine, "id">) {
+    if (hasFileAttachments(ordine)) {
+      const formData = serializeOrderFormData(ordine);
+      formData.append("_method", "PUT");
+
+      return apiRequest<Ordine>(`/ordini/${id}`, {
+        method: "POST",
+        body: formData,
+      });
+    }
+
     return apiRequest<Ordine>(`/ordini/${id}`, {
       method: "PUT",
-      body: hasFileAttachments(ordine) ? serializeOrderFormData(ordine) : JSON.stringify(ordine),
+      body: JSON.stringify(ordine),
     });
   },
 

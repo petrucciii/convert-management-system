@@ -17,8 +17,6 @@ export function ClienteForm() {
   const [dataNascita, setDataNascita] = useState("");
   const [via, setVia] = useState("");
   const [paese, setPaese] = useState("");
-  const [provincia, setProvincia] = useState("");
-  const [cap, setCap] = useState("");
   const [regione, setRegione] = useState("");
   const [telefoni, setTelefoni] = useState<Telefono[]>([
     { id: "1", numero: "", principale: true },
@@ -36,8 +34,6 @@ export function ClienteForm() {
         setDataNascita(cliente.dataNascita);
         setVia(cliente.via);
         setPaese(cliente.paese);
-        setProvincia(cliente.provincia);
-        setCap(cliente.cap);
         setRegione(cliente.regione);
         setTelefoni(cliente.telefoni);
       }
@@ -90,8 +86,6 @@ export function ClienteForm() {
     if (!dataNascita) newErrors.dataNascita = "La data di nascita e obbligatoria";
     if (!via.trim()) newErrors.via = "La via e obbligatoria";
     if (!paese.trim()) newErrors.paese = "Il paese e obbligatorio";
-    if (!provincia.trim()) newErrors.provincia = "La provincia e obbligatoria";
-    if (!cap.trim()) newErrors.cap = "Il CAP e obbligatorio";
     if (!regione.trim()) newErrors.regione = "La regione e obbligatoria";
 
     telefoni.forEach((telefono, index) => {
@@ -120,8 +114,6 @@ export function ClienteForm() {
       dataNascita,
       via,
       paese,
-      provincia,
-      cap,
       regione,
       telefoni,
       dataUltimoOrdine: isEdit && id ? getCliente(id)?.dataUltimoOrdine : undefined,
@@ -285,38 +277,7 @@ export function ClienteForm() {
               {errors.paese && <p className="text-red-600 text-sm mt-1">{errors.paese}</p>}
             </div>
 
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Provincia *</label>
-              <input
-                type="text"
-                value={provincia}
-                onChange={(event) => {
-                  setProvincia(event.target.value.toUpperCase());
-                  setErrors((current) => ({ ...current, provincia: "" }));
-                }}
-                className={inputClass("provincia")}
-                maxLength={2}
-              />
-              {errors.provincia && (
-                <p className="text-red-600 text-sm mt-1">{errors.provincia}</p>
-              )}
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">CAP *</label>
-              <input
-                type="text"
-                value={cap}
-                onChange={(event) => {
-                  setCap(event.target.value);
-                  setErrors((current) => ({ ...current, cap: "" }));
-                }}
-                className={inputClass("cap")}
-              />
-              {errors.cap && <p className="text-red-600 text-sm mt-1">{errors.cap}</p>}
-            </div>
-
-            <div className="md:col-span-2">
+            <div className="md:col-span-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">Regione *</label>
               <input
                 type="text"
