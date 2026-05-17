@@ -77,6 +77,7 @@ class CustomerController extends Controller
             'last_name' => $this->titleValue($request, ['cognome', 'last_name']),
             'vat_number' => $this->upperValue($request, ['partitaIva', 'partita_iva', 'vat_number']),
             'fiscal_code' => $this->upperValue($request, ['codiceFiscale', 'codice_fiscale', 'fiscal_code']),
+            'email' => $this->emailValue($request, ['email', 'mail']),
             'birth_date' => $this->stringValue($request, ['dataNascita', 'data_nascita', 'birth_date']),
             'address' => $this->titleValue($request, ['via', 'address']),
             'notes' => $this->stringValue($request, ['notes', 'note']),
@@ -159,6 +160,7 @@ class CustomerController extends Controller
             'cognome' => $customer->last_name ?? '',
             'partitaIva' => $customer->vat_number ?? '',
             'codiceFiscale' => $customer->fiscal_code ?? '',
+            'email' => $customer->email ?? '',
             'dataNascita' => optional($customer->birth_date)->format('Y-m-d') ?? '',
             'via' => $customer->address ?? '',
             'paese' => $customer->town?->name ?? '',
@@ -206,6 +208,13 @@ class CustomerController extends Controller
         $value = $this->stringValue($request, $keys);
 
         return $value === null ? null : Str::upper($value);
+    }
+
+    private function emailValue(Request $request, array $keys): ?string
+    {
+        $value = $this->stringValue($request, $keys);
+
+        return $value === null ? null : Str::lower($value);
     }
 
     private function nullableString(mixed $value): ?string

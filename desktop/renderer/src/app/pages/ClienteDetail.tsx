@@ -1,15 +1,72 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router";
-import { Download, Edit, ExternalLink, FileText, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router";
+import {
+  ArrowLeft,
+  Download,
+  Edit,
+  ExternalLink,
+  FileDown,
+  FileText,
+  Plus,
+  Printer,
+  Trash2,
+  X,
+} from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Tabs from "@radix-ui/react-tabs";
-import { Cliente, Telefono, useApp } from "../context/AppContext";
+import { Cliente, PaeseDizionario, Telefono, useApp } from "../context/AppContext";
+import { SearchableSelect } from "../components/SearchableSelect";
+
+function normalizeFiscalValue(value: string) {
+  return value.trim().replace(/\s+/g, "").toUpperCase();
+}
+
+function isValidFiscalLength(value: string) {
+  if (!value) {
+    return true;
+  }
+
+  return value.length === 11 || value.length === 16;
+}
+
+function isValidEmail(value: string) {
+  if (!value.trim()) {
+    return true;
+  }
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function paeseLabel(paese: PaeseDizionario) {
+  return [paese.name, paese.province].filter(Boolean).join(" - ");
+}
+
+type PrintResult = {
+  success?: boolean;
+  canceled?: boolean;
+  error?: string | null;
+  filePath?: string;
+};
+
+declare global {
+  interface Window {
+    electronPrint?: {
+      printPage: () => Promise<PrintResult>;
+      savePagePdf: (defaultName: string) => Promise<PrintResult>;
+    };
+  }
+}
+
+function safeFileName(value: string) {
+  return value.replace(/[<>:"/\\|?*]+/g, " ").replace(/\s+/g, " ").trim();
+}
 
 export function ClienteDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     getCliente,
     updateCliente,
@@ -17,9 +74,14 @@ export function ClienteDetail() {
     getOrdiniByCliente,
     deleteOrdine,
     getModello,
+    paesi,
+    regioni,
+    getRegione,
   } = useApp();
-  const [activeTab, setActiveTab] = useState("anagrafica");
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") === "ordini" ? "ordini" : "anagrafica");
   const [draftCliente, setDraftCliente] = useState<Cliente | null>(null);
+  const [selectedRegioneId, setSelectedRegioneId] = useState("");
+  const [selectedPaeseId, setSelectedPaeseId] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [deleteClienteOpen, setDeleteClienteOpen] = useState(false);
   const [deleteOrdineId, setDeleteOrdineId] = useState<string | null>(null);
@@ -34,8 +96,45 @@ export function ClienteDetail() {
         ...cliente,
         telefoni: cliente.telefoni.map((telefono) => ({ ...telefono })),
       });
+
+      const matchedRegion = regioni.find((item) => item.name === cliente.regione);
+      setSelectedRegioneId(matchedRegion?.id || "");
+
+      const matchedTown = paesi.find(
+        (item) =>
+          item.name === cliente.paese &&
+          (item.province || "") === cliente.provincia &&
+          (item.postal_code || "") === cliente.cap
+      );
+      setSelectedPaeseId(matchedTown?.id || "");
     }
-  }, [cliente]);
+  }, [cliente, paesi, regioni]);
+
+  const filteredPaesi = useMemo(() => {
+    return paesi.filter((item) => !selectedRegioneId || item.region_id === selectedRegioneId);
+  }, [paesi, selectedRegioneId]);
+
+  const regionOptions = useMemo(
+    () =>
+      regioni.map((item) => ({
+        value: item.id,
+        label: item.name || "Senza nome",
+        searchText: item.description || "",
+      })),
+    [regioni]
+  );
+
+  const paeseOptions = useMemo(
+    () =>
+      filteredPaesi.map((item) => ({
+        value: item.id,
+        label: paeseLabel(item),
+        searchText: `${item.name} ${item.province || ""} ${item.postal_code || ""} ${
+          item.region?.name || getRegione(item.region_id || "")?.name || ""
+        }`,
+      })),
+    [filteredPaesi, getRegione]
+  );
 
   if (!cliente || !draftCliente) {
     return (
@@ -48,6 +147,63 @@ export function ClienteDetail() {
   const updateDraftField = (field: keyof Cliente, value: string) => {
     setDraftCliente((current) => (current ? { ...current, [field]: value } : current));
     setErrors((current) => ({ ...current, [field]: "" }));
+  };
+
+  const applyPaese = (selectedPaese: PaeseDizionario | undefined) => {
+    if (!selectedPaese) {
+      setSelectedPaeseId("");
+      setDraftCliente((current) =>
+        current
+          ? {
+              ...current,
+              paese: "",
+              provincia: "",
+              cap: "",
+            }
+          : current
+      );
+      return;
+    }
+
+    const regionName = selectedPaese.region?.name || getRegione(selectedPaese.region_id || "")?.name || "";
+
+    setSelectedPaeseId(selectedPaese.id);
+    setSelectedRegioneId(selectedPaese.region_id || "");
+    setDraftCliente((current) =>
+      current
+        ? {
+            ...current,
+            paese: selectedPaese.name || "",
+            provincia: selectedPaese.province || "",
+            cap: selectedPaese.postal_code || "",
+            regione: regionName,
+          }
+        : current
+    );
+    setErrors((current) => ({ ...current, paese: "", provincia: "", cap: "", regione: "" }));
+  };
+
+  const handleRegioneChange = (regionId: string) => {
+    const selectedRegion = regioni.find((item) => item.id === regionId);
+    setSelectedRegioneId(regionId);
+    setSelectedPaeseId("");
+    setDraftCliente((current) =>
+      current
+        ? {
+            ...current,
+            paese: "",
+            provincia: "",
+            cap: "",
+            regione: selectedRegion?.name || "",
+          }
+        : current
+    );
+    setErrors((current) => ({ ...current, regione: "", paese: "" }));
+  };
+
+  const handlePaeseChange = (paeseId: string) => {
+    const selectedPaese = paesi.find((item) => item.id === paeseId);
+    applyPaese(selectedPaese);
   };
 
   const updateTelefono = (telefonoId: string, numero: string) => {
@@ -113,6 +269,15 @@ export function ClienteDetail() {
     if (draftCliente.dataNascita && new Date(draftCliente.dataNascita).getTime() > Date.now()) {
       newErrors.dataNascita = "La data di nascita non puo essere futura";
     }
+    if (!isValidFiscalLength(normalizeFiscalValue(draftCliente.partitaIva))) {
+      newErrors.partitaIva = "Partita IVA: inserisci 11 o 16 caratteri";
+    }
+    if (!isValidFiscalLength(normalizeFiscalValue(draftCliente.codiceFiscale))) {
+      newErrors.codiceFiscale = "Codice fiscale: inserisci 11 o 16 caratteri";
+    }
+    if (!isValidEmail(draftCliente.email)) {
+      newErrors.email = "Email non valida";
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -124,7 +289,12 @@ export function ClienteDetail() {
       return;
     }
 
-    const { id: clienteId, ...clienteData } = draftCliente;
+    const normalizedDraft = {
+      ...draftCliente,
+      partitaIva: normalizeFiscalValue(draftCliente.partitaIva),
+      codiceFiscale: normalizeFiscalValue(draftCliente.codiceFiscale),
+    };
+    const { id: clienteId, ...clienteData } = normalizedDraft;
     updateCliente(clienteId, clienteData);
     toast.success("Anagrafica aggiornata");
   };
@@ -143,6 +313,44 @@ export function ClienteDetail() {
     toast.success("Ordine eliminato con successo");
     window.alert("Ordine eliminato con successo.");
     setDeleteOrdineId(null);
+    setActiveTab("ordini");
+  };
+
+  const prepareAnagraficaPrint = async () => {
+    setActiveTab("anagrafica");
+    setSearchParams({});
+    await new Promise((resolve) => window.setTimeout(resolve, 120));
+  };
+
+  const handlePrintAnagrafica = async () => {
+    if (!window.electronPrint) {
+      toast.error("Stampa disponibile nell'app Electron.");
+      return;
+    }
+
+    await prepareAnagraficaPrint();
+    const result = await window.electronPrint.printPage();
+    if (!result.success && !result.canceled) {
+      toast.error(result.error || "Stampa non completata");
+    }
+  };
+
+  const handleSavePdf = async () => {
+    if (!window.electronPrint) {
+      toast.error("PDF disponibile nell'app Electron.");
+      return;
+    }
+
+    await prepareAnagraficaPrint();
+    const fileName = `${safeFileName(`${cliente.cognome} ${cliente.nome}`) || "anagrafica"}.pdf`;
+    const result = await window.electronPrint.savePagePdf(fileName);
+    if (result.success) {
+      toast.success("PDF salvato con successo");
+      return;
+    }
+    if (!result.canceled) {
+      toast.error(result.error || "PDF non salvato");
+    }
   };
 
   const inputClass = (name: string) =>
@@ -207,8 +415,9 @@ export function ClienteDetail() {
         <button
           type="button"
           onClick={() => navigate("/clienti")}
-          className="text-sm text-gray-600 hover:text-gray-900"
+          className="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 bg-white text-slate-800 rounded-md shadow-sm hover:bg-slate-100 hover:border-slate-500 transition-colors"
         >
+          <ArrowLeft className="w-4 h-4" />
           Torna ai clienti
         </button>
       </div>
@@ -225,6 +434,22 @@ export function ClienteDetail() {
               </p>
             </div>
             <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handlePrintAnagrafica}
+                className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-800 rounded-md hover:bg-slate-100 transition-colors"
+              >
+                <Printer className="w-4 h-4" />
+                Stampa
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePdf}
+                className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-800 rounded-md hover:bg-slate-100 transition-colors"
+              >
+                <FileDown className="w-4 h-4" />
+                PDF
+              </button>
               <button
                 type="button"
                 onClick={() => navigate(`/clienti/${id}/ordini/nuovo`)}
@@ -245,7 +470,13 @@ export function ClienteDetail() {
           </div>
         </div>
 
-        <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
+        <Tabs.Root
+          value={activeTab}
+          onValueChange={(value) => {
+            setActiveTab(value);
+            setSearchParams(value === "ordini" ? { tab: "ordini" } : {});
+          }}
+        >
           <Tabs.List className="flex border-b border-gray-200 px-6">
             <Tabs.Trigger
               value="anagrafica"
@@ -312,6 +543,18 @@ export function ClienteDetail() {
                       <p className="text-red-600 text-sm mt-1">{errors.dataNascita}</p>
                     )}
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                    <input
+                      type="email"
+                      value={draftCliente.email}
+                      onChange={(event) => updateDraftField("email", event.target.value)}
+                      className={inputClass("email")}
+                    />
+                    {errors.email && (
+                      <p className="text-red-600 text-sm mt-1">{errors.email}</p>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -326,6 +569,7 @@ export function ClienteDetail() {
                       type="text"
                       value={draftCliente.partitaIva}
                       onChange={(event) => updateDraftField("partitaIva", event.target.value)}
+                      maxLength={16}
                       className={inputClass("partitaIva")}
                     />
                     {errors.partitaIva && (
@@ -340,6 +584,7 @@ export function ClienteDetail() {
                       type="text"
                       value={draftCliente.codiceFiscale}
                       onChange={(event) => updateDraftField("codiceFiscale", event.target.value)}
+                      maxLength={16}
                       className={inputClass("codiceFiscale")}
                     />
                     {errors.codiceFiscale && (
@@ -362,12 +607,30 @@ export function ClienteDetail() {
                     />
                     {errors.via && <p className="text-red-600 text-sm mt-1">{errors.via}</p>}
                   </div>
-                  <div className="md:col-span-3">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Regione
+                    </label>
+                    <SearchableSelect
+                      value={selectedRegioneId}
+                      onChange={handleRegioneChange}
+                      options={regionOptions}
+                      placeholder="Tutte le regioni"
+                      searchPlaceholder="Cerca regione..."
+                      className={inputClass("regione")}
+                    />
+                    {errors.regione && (
+                      <p className="text-red-600 text-sm mt-1">{errors.regione}</p>
+                    )}
+                  </div>
+                  <div className="md:col-span-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Paese</label>
-                    <input
-                      type="text"
-                      value={draftCliente.paese}
-                      onChange={(event) => updateDraftField("paese", event.target.value)}
+                    <SearchableSelect
+                      value={selectedPaeseId}
+                      onChange={handlePaeseChange}
+                      options={paeseOptions}
+                      placeholder="Seleziona paese"
+                      searchPlaceholder="Cerca paese..."
                       className={inputClass("paese")}
                     />
                     {errors.paese && (
@@ -381,8 +644,8 @@ export function ClienteDetail() {
                     <input
                       type="text"
                       value={draftCliente.provincia}
-                      onChange={(event) => updateDraftField("provincia", event.target.value)}
-                      className={inputClass("provincia")}
+                      disabled
+                      className={`${inputClass("provincia")} bg-gray-100 text-gray-700`}
                     />
                     {errors.provincia && (
                       <p className="text-red-600 text-sm mt-1">{errors.provincia}</p>
@@ -393,20 +656,20 @@ export function ClienteDetail() {
                     <input
                       type="text"
                       value={draftCliente.cap}
-                      onChange={(event) => updateDraftField("cap", event.target.value)}
-                      className={inputClass("cap")}
+                      disabled
+                      className={`${inputClass("cap")} bg-gray-100 text-gray-700`}
                     />
                     {errors.cap && <p className="text-red-600 text-sm mt-1">{errors.cap}</p>}
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Regione
+                      Regione associata
                     </label>
                     <input
                       type="text"
                       value={draftCliente.regione}
-                      onChange={(event) => updateDraftField("regione", event.target.value)}
-                      className={inputClass("regione")}
+                      disabled
+                      className={`${inputClass("regione")} bg-gray-100 text-gray-700`}
                     />
                     {errors.regione && (
                       <p className="text-red-600 text-sm mt-1">{errors.regione}</p>

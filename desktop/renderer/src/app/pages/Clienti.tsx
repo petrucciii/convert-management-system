@@ -5,8 +5,9 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { useApp } from "../context/AppContext";
+import { SearchableSelect } from "../components/SearchableSelect";
 
-type SortColumn = "nome" | "cognome" | "paese" | "provincia" | "dataUltimoOrdine" | "numOrdini";
+type SortColumn = "nome" | "cognome" | "paese" | "dataUltimoOrdine" | "numOrdini";
 type SortOrder = "asc" | "desc";
 
 function getYear(value?: string | null) {
@@ -29,7 +30,7 @@ function getTimestamp(value?: string | null) {
 
 export function Clienti() {
   const navigate = useNavigate();
-  const { clienti, deleteCliente, getNumeroOrdiniCliente } = useApp();
+  const { clienti, deleteCliente, getNumeroOrdiniCliente, ordini, getModello } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [yearFilter, setYearFilter] = useState("");
   const [sortBy, setSortBy] = useState<SortColumn>("cognome");
@@ -39,27 +40,42 @@ export function Clienti() {
   const filteredAndSortedClienti = useMemo(() => {
     let result = [...clienti];
 
-    // Ricerca ampia sui dati anagrafici e sui nuovi campi indirizzo separati.
+    if (yearFilter) {
+      result = result.filter((cliente) => {
+        return ordini.some(
+          (ordine) =>
+            (ordine.clienteId === cliente.id || ordine.secondaPersonaId === cliente.id) &&
+            getYear(ordine.dataOrdine) === yearFilter
+        );
+      });
+    }
+
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      result = result.filter((cliente) =>
-        [
+      result = result.filter((cliente) => {
+        const clienteMatches = [
           cliente.nome,
           cliente.cognome,
           cliente.partitaIva,
           cliente.codiceFiscale,
+          cliente.email,
           cliente.via,
           cliente.paese,
           cliente.provincia,
           cliente.cap,
           cliente.regione,
-        ].some((value) => value.toLowerCase().includes(term))
-      );
-    }
+          cliente.telefoni.find((telefono) => telefono.principale)?.numero || "",
+          cliente.telefoni[0]?.numero || "",
+        ].some((value) => value.toLowerCase().includes(term));
 
-    if (yearFilter) {
-      result = result.filter((cliente) => {
-        return getYear(cliente.dataUltimoOrdine) === yearFilter;
+        const modelloMatches = ordini.some(
+          (ordine) =>
+            (ordine.clienteId === cliente.id || ordine.secondaPersonaId === cliente.id) &&
+            (!yearFilter || getYear(ordine.dataOrdine) === yearFilter) &&
+            (getModello(ordine.modelloId)?.nome || "").toLowerCase().includes(term)
+        );
+
+        return clienteMatches || modelloMatches;
       });
     }
 
@@ -79,10 +95,6 @@ export function Clienti() {
         compareA = a.paese.toLowerCase();
         compareB = b.paese.toLowerCase();
       }
-      if (sortBy === "provincia") {
-        compareA = a.provincia.toLowerCase();
-        compareB = b.provincia.toLowerCase();
-      }
       if (sortBy === "dataUltimoOrdine") {
         compareA = getTimestamp(a.dataUltimoOrdine);
         compareB = getTimestamp(b.dataUltimoOrdine);
@@ -98,7 +110,7 @@ export function Clienti() {
     });
 
     return result;
-  }, [clienti, getNumeroOrdiniCliente, searchTerm, sortBy, sortOrder, yearFilter]);
+  }, [clienti, getModello, getNumeroOrdiniCliente, ordini, searchTerm, sortBy, sortOrder, yearFilter]);
 
   const formatOrderDate = (value?: string | null) => {
     if (!value) {
@@ -111,14 +123,28 @@ export function Clienti() {
 
   const years = useMemo(() => {
     const yearsSet = new Set<string>();
-    clienti.forEach((cliente) => {
-      const year = getYear(cliente.dataUltimoOrdine);
+    ordini.forEach((ordine) => {
+      const year = getYear(ordine.dataOrdine);
       if (year) {
         yearsSet.add(year);
       }
     });
     return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
-  }, [clienti]);
+  }, [ordini]);
+
+  const yearOptions = useMemo(
+    () => years.map((year) => ({ value: year, label: year })),
+    [years]
+  );
+
+  const primaryPhone = (clienteId: string) => {
+    const cliente = clienti.find((item) => item.id === clienteId);
+    return (
+      cliente?.telefoni.find((telefono) => telefono.principale)?.numero ||
+      cliente?.telefoni[0]?.numero ||
+      "-"
+    );
+  };
 
   const handleSort = (column: SortColumn) => {
     if (sortBy === column) {
@@ -194,24 +220,21 @@ export function Clienti() {
               <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Cerca nome, cognome, CF, P.IVA, paese, provincia, regione..."
+                placeholder="Cerca cliente, telefono, paese o modello ordinato..."
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
               />
             </div>
-            <select
-              value={yearFilter}
-              onChange={(event) => setYearFilter(event.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-            >
-              <option value="">Tutti gli anni</option>
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
+            <div className="md:w-56">
+              <SearchableSelect
+                value={yearFilter}
+                onChange={setYearFilter}
+                options={yearOptions}
+                placeholder="Tutti gli anni"
+                searchPlaceholder="Cerca anno..."
+              />
+            </div>
           </div>
         </div>
 
@@ -221,13 +244,9 @@ export function Clienti() {
               <tr>
                 <SortHeader column="cognome" label="Cognome" />
                 <SortHeader column="nome" label="Nome" />
-                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">CF</th>
-                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">P. IVA</th>
                 <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">Via</th>
+                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">Telefono</th>
                 <SortHeader column="paese" label="Paese" />
-                <SortHeader column="provincia" label="Prov." />
-                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">CAP</th>
-                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">Regione</th>
                 <SortHeader column="dataUltimoOrdine" label="Ultimo ordine" />
                 <SortHeader column="numOrdini" label="Ordini" />
                 <th className="text-right py-3 px-5 text-sm font-medium text-gray-700">
@@ -246,13 +265,9 @@ export function Clienti() {
                     {cliente.cognome}
                   </td>
                   <td className="py-4 px-5 text-sm text-gray-900">{cliente.nome}</td>
-                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.codiceFiscale}</td>
-                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.partitaIva}</td>
                   <td className="py-4 px-5 text-sm text-gray-600">{cliente.via}</td>
+                  <td className="py-4 px-5 text-sm text-gray-600">{primaryPhone(cliente.id)}</td>
                   <td className="py-4 px-5 text-sm text-gray-600">{cliente.paese}</td>
-                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.provincia}</td>
-                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.cap}</td>
-                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.regione}</td>
                   <td className="py-4 px-5 text-sm text-gray-600">
                     {formatOrderDate(cliente.dataUltimoOrdine)}
                   </td>

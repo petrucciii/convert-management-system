@@ -1,8 +1,14 @@
 import type { Cliente, Modello, Ordine, PaeseDizionario, RegioneDizionario } from "../context/AppContext";
 
-// Endpoint relativi: Laravel puo essere montato dietro lo stesso host/proxy senza hardcodare URL.
-const API_PREFIX = "/api";
 const AUTH_TOKEN_KEY = "convert_api_token";
+
+declare global {
+  interface Window {
+    electronConfig?: {
+      apiBaseUrl?: string | null;
+    };
+  }
+}
 
 type ApiCountItem = {
   clienteId?: string;
@@ -47,11 +53,24 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function apiPrefix() {
+  const viteApiBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  if (viteApiBaseUrl) {
+    return viteApiBaseUrl.replace(/\/$/, "");
+  }
+
+  if (typeof window !== "undefined" && window.location.protocol === "file:") {
+    return (window.electronConfig?.apiBaseUrl || "http://gestionale.test/api").replace(/\/$/, "");
+  }
+
+  return "/api";
+}
+
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T | null> {
   try {
     const isFormData = init?.body instanceof FormData;
-    const response = await fetch(`${API_PREFIX}${path}`, {
-      credentials: "include",
+    const response = await fetch(`${apiPrefix()}${path}`, {
+      credentials: "same-origin",
       ...init,
       headers: {
         Accept: "application/json",

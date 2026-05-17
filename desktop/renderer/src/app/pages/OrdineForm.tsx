@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ArrowLeft, Download, ExternalLink, FileText, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { AllegatoOrdine, TipoAllegato, useApp } from "../context/AppContext";
+import { SearchableSelect } from "../components/SearchableSelect";
 
 const MAX_ATTACHMENTS = 3;
 
@@ -28,6 +29,10 @@ function formatFileSize(size?: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function clienteOrdiniPath(clienteId?: string | null) {
+  return clienteId ? `/clienti/${clienteId}?tab=ordini` : "/clienti";
+}
+
 export function OrdineForm() {
   const navigate = useNavigate();
   const { id, clienteId } = useParams();
@@ -40,6 +45,33 @@ export function OrdineForm() {
   const [secondaPersonaId, setSecondaPersonaId] = useState("");
   const [allegati, setAllegati] = useState<AllegatoOrdine[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const clienteOptions = useMemo(
+    () =>
+      clienti.map((cliente) => ({
+        value: cliente.id,
+        label: `${cliente.nome} ${cliente.cognome}`.trim() || "Senza nome",
+        searchText: `${cliente.codiceFiscale} ${cliente.partitaIva} ${cliente.paese} ${
+          cliente.telefoni.find((telefono) => telefono.principale)?.numero || ""
+        }`,
+      })),
+    [clienti]
+  );
+
+  const modelloOptions = useMemo(
+    () =>
+      modelli.map((modello) => ({
+        value: modello.id,
+        label: modello.nome || "Senza nome",
+        searchText: modello.descrizione || "",
+      })),
+    [modelli]
+  );
+
+  const secondaPersonaOptions = useMemo(
+    () => clienteOptions.filter((option) => option.value !== selectedClienteId),
+    [clienteOptions, selectedClienteId]
+  );
 
   useEffect(() => {
     if (isEdit && id) {
@@ -137,19 +169,17 @@ export function OrdineForm() {
       toast.success("Ordine creato con successo");
     }
 
-    navigate(
-      clienteId || selectedClienteId ? `/clienti/${clienteId || selectedClienteId}` : "/clienti"
-    );
+    navigate(clienteOrdiniPath(clienteId || selectedClienteId));
   };
 
   const goBack = () => {
     if (clienteId) {
-      navigate(`/clienti/${clienteId}`);
+      navigate(clienteOrdiniPath(clienteId));
       return;
     }
 
     if (selectedClienteId) {
-      navigate(`/clienti/${selectedClienteId}`);
+      navigate(clienteOrdiniPath(selectedClienteId));
       return;
     }
 
@@ -163,7 +193,7 @@ export function OrdineForm() {
       <button
         type="button"
         onClick={goBack}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+        className="inline-flex items-center gap-2 px-4 py-2 mb-6 border border-slate-300 bg-white text-slate-800 rounded-md shadow-sm hover:bg-slate-100 hover:border-slate-500 transition-colors"
       >
         <ArrowLeft className="w-5 h-5" />
         Torna indietro
@@ -211,25 +241,24 @@ export function OrdineForm() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Cliente principale
                 </label>
-                <select
+                <SearchableSelect
                   value={selectedClienteId}
-                  onChange={(event) => {
-                    setSelectedClienteId(event.target.value);
+                  onChange={(value) => {
+                    setSelectedClienteId(value);
+                    if (value === secondaPersonaId) {
+                      setSecondaPersonaId("");
+                    }
                     setErrors((current) => ({ ...current, clienteId: "" }));
                   }}
+                  options={clienteOptions}
+                  placeholder="Seleziona cliente"
+                  searchPlaceholder="Cerca cliente..."
                   className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 ${
                     errors.clienteId
                       ? "border-red-300 focus:ring-red-500"
                       : "border-gray-300 focus:ring-slate-500"
                   }`}
-                >
-                  <option value="">Seleziona un cliente</option>
-                  {clienti.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.nome} {item.cognome}
-                    </option>
-                  ))}
-                </select>
+                />
                 {errors.clienteId && (
                   <p className="text-red-600 text-sm mt-1">{errors.clienteId}</p>
                 )}
@@ -240,25 +269,21 @@ export function OrdineForm() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Modello ordinato
               </label>
-              <select
+              <SearchableSelect
                 value={modelloId}
-                onChange={(event) => {
-                  setModelloId(event.target.value);
+                onChange={(value) => {
+                  setModelloId(value);
                   setErrors((current) => ({ ...current, modelloId: "" }));
                 }}
+                options={modelloOptions}
+                placeholder="Seleziona modello"
+                searchPlaceholder="Cerca modello..."
                 className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 ${
                   errors.modelloId
                     ? "border-red-300 focus:ring-red-500"
                     : "border-gray-300 focus:ring-slate-500"
                 }`}
-              >
-                <option value="">Seleziona un modello</option>
-                {modelli.map((modello) => (
-                  <option key={modello.id} value={modello.id}>
-                    {modello.nome || "Senza nome"}
-                  </option>
-                ))}
-              </select>
+              />
               {errors.modelloId && (
                 <p className="text-red-600 text-sm mt-1">{errors.modelloId}</p>
               )}
@@ -268,23 +293,17 @@ export function OrdineForm() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Seconda persona associata
               </label>
-              <select
+              <SearchableSelect
                 value={secondaPersonaId}
-                onChange={(event) => {
-                  setSecondaPersonaId(event.target.value);
+                onChange={(value) => {
+                  setSecondaPersonaId(value);
                   setErrors((current) => ({ ...current, secondaPersonaId: "" }));
                 }}
+                options={secondaPersonaOptions}
+                placeholder="Nessuna"
+                searchPlaceholder="Cerca persona..."
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-              >
-                <option value="">Nessuna</option>
-                {clienti
-                  .filter((item) => item.id !== selectedClienteId)
-                  .map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.nome} {item.cognome}
-                    </option>
-                  ))}
-              </select>
+              />
               {errors.secondaPersonaId && (
                 <p className="text-red-600 text-sm mt-1">{errors.secondaPersonaId}</p>
               )}

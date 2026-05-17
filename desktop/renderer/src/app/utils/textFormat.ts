@@ -33,6 +33,10 @@ export function trimText(value: string) {
   return compactSpaces(value);
 }
 
+export function lowerText(value: string) {
+  return compactSpaces(value).toLocaleLowerCase("it-IT");
+}
+
 export function normalizePhones(telefoni: Telefono[]) {
   return telefoni
     .map((telefono) => ({
@@ -50,6 +54,7 @@ export function normalizeClienteInput<T extends Omit<Cliente, "id"> | Cliente>(c
     cognome: titleCaseWords(cliente.cognome || ""),
     partitaIva: upperText(cliente.partitaIva || ""),
     codiceFiscale: upperText(cliente.codiceFiscale || ""),
+    email: lowerText(cliente.email || ""),
     via: titleCaseWords(cliente.via || ""),
     paese: titleCaseWords(cliente.paese || ""),
     provincia: upperText(cliente.provincia || ""),

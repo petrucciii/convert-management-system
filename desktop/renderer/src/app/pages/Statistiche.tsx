@@ -9,6 +9,7 @@ import {
   YAxis,
 } from "recharts";
 import { useApp } from "../context/AppContext";
+import { SearchableSelect } from "../components/SearchableSelect";
 
 type ZoneKey = "paese" | "regione";
 
@@ -37,6 +38,11 @@ export function Statistiche() {
     return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
   }, [currentYear, ordini]);
 
+  const yearOptions = useMemo(
+    () => years.map((year) => ({ value: year, label: year })),
+    [years]
+  );
+
   const filteredOrdini = useMemo(() => {
     if (!selectedYear) {
       return ordini;
@@ -45,20 +51,19 @@ export function Statistiche() {
     return ordini.filter((ordine) => getYear(ordine.dataOrdine) === selectedYear);
   }, [ordini, selectedYear]);
 
-  const topModelli = useMemo(() => {
+  const modelliOrdinati = useMemo(() => {
     const counts = filteredOrdini.reduce<Record<string, number>>((acc, ordine) => {
       acc[ordine.modelloId] = (acc[ordine.modelloId] || 0) + 1;
       return acc;
     }, {});
 
-    // Top 3 ordinato: un solo grafico leggibile invece di tanti chart piccoli.
     return Object.entries(counts)
+      .filter(([, ordiniCount]) => ordiniCount > 0)
       .map(([modelloId, ordiniCount]) => ({
         nome: getModello(modelloId)?.nome || "Senza nome",
         ordini: ordiniCount,
       }))
-      .sort((a, b) => b.ordini - a.ordini)
-      .slice(0, 3);
+      .sort((a, b) => b.ordini - a.ordini);
   }, [filteredOrdini, getModello]);
 
   const buildZoneStats = (key: ZoneKey) => {
@@ -92,7 +97,7 @@ export function Statistiche() {
   const paeseStats = useMemo(() => buildZoneStats("paese"), [filteredOrdini, getCliente]);
   const regioneStats = useMemo(() => buildZoneStats("regione"), [filteredOrdini, getCliente]);
 
-  const modelloPiuRichiesto = topModelli[0]?.nome || "N/A";
+  const modelloPiuRichiesto = modelliOrdinati[0]?.nome || "N/A";
 
   const ZoneTable = ({
     title,
@@ -145,18 +150,13 @@ export function Statistiche() {
         <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-5 items-end">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Anno</label>
-            <select
+            <SearchableSelect
               value={selectedYear}
-              onChange={(event) => setSelectedYear(event.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-            >
-              <option value="">Tutti</option>
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedYear}
+              options={yearOptions}
+              placeholder="Tutti"
+              searchPlaceholder="Cerca anno..."
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -179,16 +179,16 @@ export function Statistiche() {
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
         <div className="flex items-center justify-between gap-4 mb-5">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Top 3 modelli ordinati</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Modelli ordinati</h2>
             <p className="text-sm text-gray-600">
               {selectedYear ? `Anno ${selectedYear}` : "Tutti gli anni"}
             </p>
           </div>
         </div>
 
-        {topModelli.length > 0 ? (
-          <ResponsiveContainer width="100%" height={320}>
-            <BarChart data={topModelli}>
+        {modelliOrdinati.length > 0 ? (
+          <ResponsiveContainer width="100%" height={Math.max(320, modelliOrdinati.length * 44)}>
+            <BarChart data={modelliOrdinati}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="nome" tick={{ fill: "#4b5563" }} />
               <YAxis allowDecimals={false} tick={{ fill: "#4b5563" }} />

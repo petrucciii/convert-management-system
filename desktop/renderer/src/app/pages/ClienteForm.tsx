@@ -1,25 +1,53 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { toast } from "sonner";
-import { Telefono, useApp } from "../context/AppContext";
+import { PaeseDizionario, Telefono, useApp } from "../context/AppContext";
+import { SearchableSelect } from "../components/SearchableSelect";
+
+function normalizeFiscalValue(value: string) {
+  return value.trim().replace(/\s+/g, "").toUpperCase();
+}
+
+function isValidFiscalLength(value: string) {
+  if (!value) {
+    return true;
+  }
+
+  return value.length === 11 || value.length === 16;
+}
+
+function isValidEmail(value: string) {
+  if (!value.trim()) {
+    return true;
+  }
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function paeseLabel(paese: PaeseDizionario) {
+  return [paese.name, paese.province].filter(Boolean).join(" - ");
+}
 
 export function ClienteForm() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { addCliente, updateCliente, getCliente } = useApp();
+  const { addCliente, updateCliente, getCliente, paesi, regioni, getRegione } = useApp();
   const isEdit = !!id;
 
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
   const [partitaIva, setPartitaIva] = useState("");
   const [codiceFiscale, setCodiceFiscale] = useState("");
+  const [email, setEmail] = useState("");
   const [dataNascita, setDataNascita] = useState("");
   const [via, setVia] = useState("");
   const [paese, setPaese] = useState("");
   const [provincia, setProvincia] = useState("");
   const [cap, setCap] = useState("");
   const [regione, setRegione] = useState("");
+  const [selectedRegioneId, setSelectedRegioneId] = useState("");
+  const [selectedPaeseId, setSelectedPaeseId] = useState("");
   const [telefoni, setTelefoni] = useState<Telefono[]>([
     { id: "1", numero: "", principale: true },
   ]);
@@ -33,6 +61,7 @@ export function ClienteForm() {
         setCognome(cliente.cognome);
         setPartitaIva(cliente.partitaIva);
         setCodiceFiscale(cliente.codiceFiscale);
+        setEmail(cliente.email);
         setDataNascita(cliente.dataNascita);
         setVia(cliente.via);
         setPaese(cliente.paese);
@@ -43,6 +72,88 @@ export function ClienteForm() {
       }
     }
   }, [getCliente, id, isEdit]);
+
+  useEffect(() => {
+    if (!regione && !paese) {
+      return;
+    }
+
+    const matchedRegion = regioni.find((item) => item.name === regione);
+    if (matchedRegion) {
+      setSelectedRegioneId(matchedRegion.id);
+    }
+    const matchedTown = paesi.find(
+      (item) =>
+        item.name === paese &&
+        (item.province || "") === provincia &&
+        (item.postal_code || "") === cap
+    );
+    if (matchedTown) {
+      setSelectedPaeseId(matchedTown.id);
+    }
+  }, [cap, paese, paesi, provincia, regione, regioni]);
+
+  const filteredPaesi = useMemo(() => {
+    return paesi.filter((item) => !selectedRegioneId || item.region_id === selectedRegioneId);
+  }, [paesi, selectedRegioneId]);
+
+  const regionOptions = useMemo(
+    () =>
+      regioni.map((item) => ({
+        value: item.id,
+        label: item.name || "Senza nome",
+        searchText: item.description || "",
+      })),
+    [regioni]
+  );
+
+  const paeseOptions = useMemo(
+    () =>
+      filteredPaesi.map((item) => ({
+        value: item.id,
+        label: paeseLabel(item),
+        searchText: `${item.name} ${item.province || ""} ${item.postal_code || ""} ${
+          item.region?.name || getRegione(item.region_id || "")?.name || ""
+        }`,
+      })),
+    [filteredPaesi, getRegione]
+  );
+
+  const applyPaese = (selectedPaese: PaeseDizionario | undefined) => {
+    if (!selectedPaese) {
+      setSelectedPaeseId("");
+      setPaese("");
+      setProvincia("");
+      setCap("");
+      return;
+    }
+
+    const regionName = selectedPaese.region?.name || getRegione(selectedPaese.region_id || "")?.name || "";
+
+    setSelectedPaeseId(selectedPaese.id);
+    setPaese(selectedPaese.name || "");
+    setProvincia(selectedPaese.province || "");
+    setCap(selectedPaese.postal_code || "");
+    setRegione(regionName);
+    setSelectedRegioneId(selectedPaese.region_id || "");
+    setErrors((current) => ({ ...current, paese: "", provincia: "", cap: "", regione: "" }));
+  };
+
+  const handleRegioneChange = (regionId: string) => {
+    const selectedRegion = regioni.find((item) => item.id === regionId);
+    setSelectedRegioneId(regionId);
+    setRegione(selectedRegion?.name || "");
+    setSelectedPaeseId("");
+    setPaese("");
+    setProvincia("");
+    setCap("");
+    setErrors((current) => ({ ...current, regione: "", paese: "" }));
+  };
+
+  const handlePaeseChange = (paeseId: string) => {
+    const selectedPaese = paesi.find((item) => item.id === paeseId);
+    applyPaese(selectedPaese);
+  };
 
   const addTelefono = () => {
     setTelefoni((current) => [
@@ -80,6 +191,15 @@ export function ClienteForm() {
     if (dataNascita && new Date(dataNascita).getTime() > Date.now()) {
       newErrors.dataNascita = "La data di nascita non puo essere futura";
     }
+    if (!isValidFiscalLength(normalizeFiscalValue(partitaIva))) {
+      newErrors.partitaIva = "Partita IVA: inserisci 11 o 16 caratteri";
+    }
+    if (!isValidFiscalLength(normalizeFiscalValue(codiceFiscale))) {
+      newErrors.codiceFiscale = "Codice fiscale: inserisci 11 o 16 caratteri";
+    }
+    if (!isValidEmail(email)) {
+      newErrors.email = "Email non valida";
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -96,8 +216,9 @@ export function ClienteForm() {
     const clienteData = {
       nome,
       cognome,
-      partitaIva,
-      codiceFiscale,
+      partitaIva: normalizeFiscalValue(partitaIva),
+      codiceFiscale: normalizeFiscalValue(codiceFiscale),
+      email,
       dataNascita,
       via,
       paese,
@@ -129,7 +250,7 @@ export function ClienteForm() {
       <button
         type="button"
         onClick={() => navigate("/clienti")}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+        className="inline-flex items-center gap-2 px-4 py-2 mb-6 border border-slate-300 bg-white text-slate-800 rounded-md shadow-sm hover:bg-slate-100 hover:border-slate-500 transition-colors"
       >
         <ArrowLeft className="w-5 h-5" />
         Torna ai clienti
@@ -193,6 +314,20 @@ export function ClienteForm() {
                 <p className="text-red-600 text-sm mt-1">{errors.dataNascita}</p>
               )}
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setErrors((current) => ({ ...current, email: "" }));
+                }}
+                className={inputClass("email")}
+              />
+              {errors.email && <p className="text-red-600 text-sm mt-1">{errors.email}</p>}
+            </div>
           </div>
         </div>
 
@@ -208,6 +343,7 @@ export function ClienteForm() {
                   setPartitaIva(event.target.value);
                   setErrors((current) => ({ ...current, partitaIva: "" }));
                 }}
+                maxLength={16}
                 className={inputClass("partitaIva")}
               />
               {errors.partitaIva && (
@@ -226,6 +362,7 @@ export function ClienteForm() {
                   setCodiceFiscale(event.target.value);
                   setErrors((current) => ({ ...current, codiceFiscale: "" }));
                 }}
+                maxLength={16}
                 className={inputClass("codiceFiscale")}
               />
               {errors.codiceFiscale && (
@@ -252,15 +389,27 @@ export function ClienteForm() {
               {errors.via && <p className="text-red-600 text-sm mt-1">{errors.via}</p>}
             </div>
 
-            <div className="md:col-span-3">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Regione</label>
+              <SearchableSelect
+                value={selectedRegioneId}
+                onChange={handleRegioneChange}
+                options={regionOptions}
+                placeholder="Tutte le regioni"
+                searchPlaceholder="Cerca regione..."
+                className={inputClass("regione")}
+              />
+              {errors.regione && <p className="text-red-600 text-sm mt-1">{errors.regione}</p>}
+            </div>
+
+            <div className="md:col-span-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Paese</label>
-              <input
-                type="text"
-                value={paese}
-                onChange={(event) => {
-                  setPaese(event.target.value);
-                  setErrors((current) => ({ ...current, paese: "" }));
-                }}
+              <SearchableSelect
+                value={selectedPaeseId}
+                onChange={handlePaeseChange}
+                options={paeseOptions}
+                placeholder="Seleziona paese"
+                searchPlaceholder="Cerca paese..."
                 className={inputClass("paese")}
               />
               {errors.paese && <p className="text-red-600 text-sm mt-1">{errors.paese}</p>}
@@ -271,11 +420,8 @@ export function ClienteForm() {
               <input
                 type="text"
                 value={provincia}
-                onChange={(event) => {
-                  setProvincia(event.target.value);
-                  setErrors((current) => ({ ...current, provincia: "" }));
-                }}
-                className={inputClass("provincia")}
+                disabled
+                className={`${inputClass("provincia")} bg-gray-100 text-gray-700`}
               />
               {errors.provincia && (
                 <p className="text-red-600 text-sm mt-1">{errors.provincia}</p>
@@ -287,27 +433,22 @@ export function ClienteForm() {
               <input
                 type="text"
                 value={cap}
-                onChange={(event) => {
-                  setCap(event.target.value);
-                  setErrors((current) => ({ ...current, cap: "" }));
-                }}
-                className={inputClass("cap")}
+                disabled
+                className={`${inputClass("cap")} bg-gray-100 text-gray-700`}
               />
               {errors.cap && <p className="text-red-600 text-sm mt-1">{errors.cap}</p>}
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Regione</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Regione associata
+              </label>
               <input
                 type="text"
                 value={regione}
-                onChange={(event) => {
-                  setRegione(event.target.value);
-                  setErrors((current) => ({ ...current, regione: "" }));
-                }}
-                className={inputClass("regione")}
+                disabled
+                className={`${inputClass("regione")} bg-gray-100 text-gray-700`}
               />
-              {errors.regione && <p className="text-red-600 text-sm mt-1">{errors.regione}</p>}
             </div>
           </div>
         </div>

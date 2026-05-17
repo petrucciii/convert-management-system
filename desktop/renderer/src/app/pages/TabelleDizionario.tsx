@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Modello, PaeseDizionario, RegioneDizionario, useApp } from "../context/AppContext";
+import { SearchableSelect } from "../components/SearchableSelect";
 
 type DictionaryTable = "modelli" | "regioni" | "paesi";
 
@@ -90,6 +91,15 @@ export function TabelleDizionario() {
   }, [getRegione, paesi, searchTerm]);
 
   const activeTab = tabs.find((tab) => tab.id === activeTable) || tabs[0];
+  const regionOptions = useMemo(
+    () =>
+      regioni.map((regione) => ({
+        value: regione.id,
+        label: regione.name || "Senza nome",
+        searchText: regione.description || "",
+      })),
+    [regioni]
+  );
 
   const getRegionName = (paese: PaeseDizionario) => {
     return paese.region?.name || getRegione(paese.region_id || "")?.name || "-";
@@ -401,20 +411,14 @@ export function TabelleDizionario() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Regione</label>
-                    <select
+                    <SearchableSelect
                       value={formData.regionId}
-                      onChange={(event) =>
-                        setFormData({ ...formData, regionId: event.target.value })
-                      }
+                      onChange={(value) => setFormData({ ...formData, regionId: value })}
+                      options={regionOptions}
+                      placeholder="Nessuna"
+                      searchPlaceholder="Cerca regione..."
                       className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                    >
-                      <option value="">Nessuna</option>
-                      {regioni.map((regione) => (
-                        <option key={regione.id} value={regione.id}>
-                          {regione.name || "Senza nome"}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
                 </div>
               )}

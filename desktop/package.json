@@ -4,7 +4,10 @@
   "description": "",
   "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev:renderer": "npm --prefix renderer run dev -- --host 127.0.0.1 --port 5173",
+    "dev": "set ELECTRON_RENDERER_URL=http://127.0.0.1:5173&& electron .",
+    "build:renderer": "npm --prefix renderer run build",
+    "start": "npm run build:renderer && electron ."
   },
   "keywords": [],
   "author": "",

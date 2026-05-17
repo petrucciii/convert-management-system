@@ -28,6 +28,7 @@ export interface Cliente {
   cognome: string;
   partitaIva: string;
   codiceFiscale: string;
+  email: string;
   dataNascita: string;
   via: string;
   paese: string;

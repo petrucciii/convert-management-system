@@ -27,9 +27,9 @@ export function MainLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 text-gray-900 flex flex-col">
+    <div className="min-h-screen bg-slate-200 text-gray-950 flex flex-col">
       {/* Navbar superiore: sostituisce la vecchia sidebar e lascia piu spazio alle tabelle. */}
-      <header className="bg-white border-b border-gray-200">
+      <header className="bg-white border-b border-slate-300 shadow-sm">
         <div className="h-16 px-6 flex items-center justify-between gap-6">
           <div className="shrink-0">
             <p className="text-xs uppercase tracking-wide text-gray-500">Gestionale</p>
@@ -48,8 +48,8 @@ export function MainLayout() {
                   onClick={() => navigate(item.path)}
                   className={`inline-flex items-center gap-2 px-3 py-2 rounded-md transition-colors ${
                     active
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-950"
+                      ? "bg-slate-950 text-white"
+                      : "text-gray-700 hover:bg-slate-200 hover:text-gray-950"
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -62,7 +62,7 @@ export function MainLayout() {
           <button
             type="button"
             onClick={handleLogout}
-            className="inline-flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+            className="inline-flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-slate-200 rounded-md transition-colors"
           >
             <LogOut className="w-4 h-4" />
             <span>Logout</span>

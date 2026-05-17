@@ -17,6 +17,7 @@ class Customer extends Model
         'last_name',
         'vat_number',
         'fiscal_code',
+        'email',
         'birth_date',
         'address',
         'notes',
