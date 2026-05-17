@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { useApp, Telefono } from "../context/AppContext";
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { toast } from "sonner";
+import { Telefono, useApp } from "../context/AppContext";
 
 export function ClienteForm() {
   const navigate = useNavigate();
@@ -15,11 +15,14 @@ export function ClienteForm() {
   const [partitaIva, setPartitaIva] = useState("");
   const [codiceFiscale, setCodiceFiscale] = useState("");
   const [dataNascita, setDataNascita] = useState("");
-  const [indirizzo, setIndirizzo] = useState("");
+  const [via, setVia] = useState("");
+  const [paese, setPaese] = useState("");
+  const [provincia, setProvincia] = useState("");
+  const [cap, setCap] = useState("");
+  const [regione, setRegione] = useState("");
   const [telefoni, setTelefoni] = useState<Telefono[]>([
     { id: "1", numero: "", principale: true },
   ]);
-
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -31,50 +34,69 @@ export function ClienteForm() {
         setPartitaIva(cliente.partitaIva);
         setCodiceFiscale(cliente.codiceFiscale);
         setDataNascita(cliente.dataNascita);
-        setIndirizzo(cliente.indirizzo);
+        setVia(cliente.via);
+        setPaese(cliente.paese);
+        setProvincia(cliente.provincia);
+        setCap(cliente.cap);
+        setRegione(cliente.regione);
         setTelefoni(cliente.telefoni);
       }
     }
-  }, [id, isEdit, getCliente]);
+  }, [getCliente, id, isEdit]);
 
   const addTelefono = () => {
-    setTelefoni([...telefoni, { id: Date.now().toString(), numero: "", principale: false }]);
+    setTelefoni((current) => [
+      ...current,
+      { id: Date.now().toString(), numero: "", principale: false },
+    ]);
   };
 
-  const removeTelefono = (id: string) => {
+  const removeTelefono = (telefonoId: string) => {
     if (telefoni.length === 1) {
       toast.error("Deve esserci almeno un telefono");
       return;
     }
-    const removed = telefoni.find((t) => t.id === id);
-    const newTelefoni = telefoni.filter((t) => t.id !== id);
-    if (removed?.principale && newTelefoni.length > 0) {
-      newTelefoni[0].principale = true;
+
+    const removed = telefoni.find((telefono) => telefono.id === telefonoId);
+    const nextTelefoni = telefoni.filter((telefono) => telefono.id !== telefonoId);
+    if (removed?.principale && nextTelefoni.length > 0) {
+      nextTelefoni[0].principale = true;
     }
-    setTelefoni(newTelefoni);
+    setTelefoni(nextTelefoni);
   };
 
-  const updateTelefono = (id: string, numero: string) => {
-    setTelefoni(telefoni.map((t) => (t.id === id ? { ...t, numero } : t)));
+  const updateTelefono = (telefonoId: string, numero: string) => {
+    setTelefoni((current) =>
+      current.map((telefono) =>
+        telefono.id === telefonoId ? { ...telefono, numero } : telefono
+      )
+    );
   };
 
-  const setPrincipale = (id: string) => {
-    setTelefoni(telefoni.map((t) => ({ ...t, principale: t.id === id })));
+  const setPrincipale = (telefonoId: string) => {
+    setTelefoni((current) =>
+      current.map((telefono) => ({ ...telefono, principale: telefono.id === telefonoId }))
+    );
   };
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!nome.trim()) newErrors.nome = "Il nome è obbligatorio";
-    if (!cognome.trim()) newErrors.cognome = "Il cognome è obbligatorio";
-    if (!partitaIva.trim()) newErrors.partitaIva = "La partita IVA è obbligatoria";
-    if (!codiceFiscale.trim()) newErrors.codiceFiscale = "Il codice fiscale è obbligatorio";
-    if (!dataNascita) newErrors.dataNascita = "La data di nascita è obbligatoria";
-    if (!indirizzo.trim()) newErrors.indirizzo = "L'indirizzo è obbligatorio";
+    // I campi geografici sono separati per filtrare e aggregare in Laravel/statistiche.
+    if (!nome.trim()) newErrors.nome = "Il nome e obbligatorio";
+    if (!cognome.trim()) newErrors.cognome = "Il cognome e obbligatorio";
+    if (!partitaIva.trim()) newErrors.partitaIva = "La partita IVA e obbligatoria";
+    if (!codiceFiscale.trim()) newErrors.codiceFiscale = "Il codice fiscale e obbligatorio";
+    if (!dataNascita) newErrors.dataNascita = "La data di nascita e obbligatoria";
+    if (!via.trim()) newErrors.via = "La via e obbligatoria";
+    if (!paese.trim()) newErrors.paese = "Il paese e obbligatorio";
+    if (!provincia.trim()) newErrors.provincia = "La provincia e obbligatoria";
+    if (!cap.trim()) newErrors.cap = "Il CAP e obbligatorio";
+    if (!regione.trim()) newErrors.regione = "La regione e obbligatoria";
 
-    telefoni.forEach((tel, idx) => {
-      if (!tel.numero.trim()) {
-        newErrors[`telefono-${idx}`] = "Il numero di telefono è obbligatorio";
+    telefoni.forEach((telefono, index) => {
+      if (!telefono.numero.trim()) {
+        newErrors[`telefono-${index}`] = "Il numero di telefono e obbligatorio";
       }
     });
 
@@ -82,8 +104,8 @@ export function ClienteForm() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
 
     if (!validate()) {
       toast.error("Compila tutti i campi obbligatori");
@@ -96,8 +118,13 @@ export function ClienteForm() {
       partitaIva,
       codiceFiscale,
       dataNascita,
-      indirizzo,
+      via,
+      paese,
+      provincia,
+      cap,
+      regione,
       telefoni,
+      dataUltimoOrdine: isEdit && id ? getCliente(id)?.dataUltimoOrdine : undefined,
     };
 
     if (isEdit && id) {
@@ -111,9 +138,15 @@ export function ClienteForm() {
     navigate("/clienti");
   };
 
+  const inputClass = (name: string) =>
+    `w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+      errors[name] ? "border-red-300 focus:ring-red-500" : "border-gray-300 focus:ring-slate-500"
+    }`;
+
   return (
     <div className="p-8">
       <button
+        type="button"
         onClick={() => navigate("/clienti")}
         className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
       >
@@ -126,72 +159,54 @@ export function ClienteForm() {
           {isEdit ? "Modifica cliente" : "Aggiungi cliente"}
         </h1>
         <p className="text-gray-600 mt-1">
-          {isEdit ? "Modifica le informazioni del cliente" : "Inserisci i dati del nuovo cliente"}
+          {isEdit ? "Aggiorna i dati anagrafici" : "Inserisci una nuova anagrafica"}
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Dati anagrafici</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nome <span className="text-red-600">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nome *</label>
               <input
                 type="text"
                 value={nome}
-                onChange={(e) => {
-                  setNome(e.target.value);
-                  setErrors((prev) => ({ ...prev, nome: "" }));
+                onChange={(event) => {
+                  setNome(event.target.value);
+                  setErrors((current) => ({ ...current, nome: "" }));
                 }}
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                  errors.nome
-                    ? "border-red-300 focus:ring-red-500"
-                    : "border-gray-300 focus:ring-blue-500"
-                }`}
-                placeholder="Inserisci il nome"
+                className={inputClass("nome")}
               />
               {errors.nome && <p className="text-red-600 text-sm mt-1">{errors.nome}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cognome <span className="text-red-600">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Cognome *</label>
               <input
                 type="text"
                 value={cognome}
-                onChange={(e) => {
-                  setCognome(e.target.value);
-                  setErrors((prev) => ({ ...prev, cognome: "" }));
+                onChange={(event) => {
+                  setCognome(event.target.value);
+                  setErrors((current) => ({ ...current, cognome: "" }));
                 }}
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                  errors.cognome
-                    ? "border-red-300 focus:ring-red-500"
-                    : "border-gray-300 focus:ring-blue-500"
-                }`}
-                placeholder="Inserisci il cognome"
+                className={inputClass("cognome")}
               />
               {errors.cognome && <p className="text-red-600 text-sm mt-1">{errors.cognome}</p>}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Data di nascita <span className="text-red-600">*</span>
+                Data di nascita *
               </label>
               <input
                 type="date"
                 value={dataNascita}
-                onChange={(e) => {
-                  setDataNascita(e.target.value);
-                  setErrors((prev) => ({ ...prev, dataNascita: "" }));
+                onChange={(event) => {
+                  setDataNascita(event.target.value);
+                  setErrors((current) => ({ ...current, dataNascita: "" }));
                 }}
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                  errors.dataNascita
-                    ? "border-red-300 focus:ring-red-500"
-                    : "border-gray-300 focus:ring-blue-500"
-                }`}
+                className={inputClass("dataNascita")}
               />
               {errors.dataNascita && (
                 <p className="text-red-600 text-sm mt-1">{errors.dataNascita}</p>
@@ -200,26 +215,19 @@ export function ClienteForm() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Dati fiscali</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Partita IVA <span className="text-red-600">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Partita IVA *</label>
               <input
                 type="text"
                 value={partitaIva}
-                onChange={(e) => {
-                  setPartitaIva(e.target.value);
-                  setErrors((prev) => ({ ...prev, partitaIva: "" }));
+                onChange={(event) => {
+                  setPartitaIva(event.target.value);
+                  setErrors((current) => ({ ...current, partitaIva: "" }));
                 }}
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                  errors.partitaIva
-                    ? "border-red-300 focus:ring-red-500"
-                    : "border-gray-300 focus:ring-blue-500"
-                }`}
-                placeholder="Inserisci la partita IVA"
+                className={inputClass("partitaIva")}
               />
               {errors.partitaIva && (
                 <p className="text-red-600 text-sm mt-1">{errors.partitaIva}</p>
@@ -228,21 +236,16 @@ export function ClienteForm() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Codice fiscale <span className="text-red-600">*</span>
+                Codice fiscale *
               </label>
               <input
                 type="text"
                 value={codiceFiscale}
-                onChange={(e) => {
-                  setCodiceFiscale(e.target.value);
-                  setErrors((prev) => ({ ...prev, codiceFiscale: "" }));
+                onChange={(event) => {
+                  setCodiceFiscale(event.target.value);
+                  setErrors((current) => ({ ...current, codiceFiscale: "" }));
                 }}
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                  errors.codiceFiscale
-                    ? "border-red-300 focus:ring-red-500"
-                    : "border-gray-300 focus:ring-blue-500"
-                }`}
-                placeholder="Inserisci il codice fiscale"
+                className={inputClass("codiceFiscale")}
               />
               {errors.codiceFiscale && (
                 <p className="text-red-600 text-sm mt-1">{errors.codiceFiscale}</p>
@@ -251,62 +254,117 @@ export function ClienteForm() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Indirizzo</h2>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Indirizzo completo <span className="text-red-600">*</span>
-            </label>
-            <input
-              type="text"
-              value={indirizzo}
-              onChange={(e) => {
-                setIndirizzo(e.target.value);
-                setErrors((prev) => ({ ...prev, indirizzo: "" }));
-              }}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                errors.indirizzo
-                  ? "border-red-300 focus:ring-red-500"
-                  : "border-gray-300 focus:ring-blue-500"
-              }`}
-              placeholder="Via, Numero, Città, CAP"
-            />
-            {errors.indirizzo && <p className="text-red-600 text-sm mt-1">{errors.indirizzo}</p>}
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+            <div className="md:col-span-3">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Via *</label>
+              <input
+                type="text"
+                value={via}
+                onChange={(event) => {
+                  setVia(event.target.value);
+                  setErrors((current) => ({ ...current, via: "" }));
+                }}
+                className={inputClass("via")}
+              />
+              {errors.via && <p className="text-red-600 text-sm mt-1">{errors.via}</p>}
+            </div>
+
+            <div className="md:col-span-3">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Paese *</label>
+              <input
+                type="text"
+                value={paese}
+                onChange={(event) => {
+                  setPaese(event.target.value);
+                  setErrors((current) => ({ ...current, paese: "" }));
+                }}
+                className={inputClass("paese")}
+              />
+              {errors.paese && <p className="text-red-600 text-sm mt-1">{errors.paese}</p>}
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Provincia *</label>
+              <input
+                type="text"
+                value={provincia}
+                onChange={(event) => {
+                  setProvincia(event.target.value.toUpperCase());
+                  setErrors((current) => ({ ...current, provincia: "" }));
+                }}
+                className={inputClass("provincia")}
+                maxLength={2}
+              />
+              {errors.provincia && (
+                <p className="text-red-600 text-sm mt-1">{errors.provincia}</p>
+              )}
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">CAP *</label>
+              <input
+                type="text"
+                value={cap}
+                onChange={(event) => {
+                  setCap(event.target.value);
+                  setErrors((current) => ({ ...current, cap: "" }));
+                }}
+                className={inputClass("cap")}
+              />
+              {errors.cap && <p className="text-red-600 text-sm mt-1">{errors.cap}</p>}
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Regione *</label>
+              <input
+                type="text"
+                value={regione}
+                onChange={(event) => {
+                  setRegione(event.target.value);
+                  setErrors((current) => ({ ...current, regione: "" }));
+                }}
+                className={inputClass("regione")}
+              />
+              {errors.regione && <p className="text-red-600 text-sm mt-1">{errors.regione}</p>}
+            </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Contatti</h2>
             <button
               type="button"
               onClick={addTelefono}
-              className="flex items-center gap-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
             >
               <Plus className="w-4 h-4" />
               Aggiungi telefono
             </button>
           </div>
+
           <div className="space-y-3">
-            {telefoni.map((telefono, idx) => (
+            {telefoni.map((telefono, index) => (
               <div key={telefono.id} className="flex items-center gap-3">
                 <div className="flex-1">
                   <input
                     type="tel"
                     value={telefono.numero}
-                    onChange={(e) => {
-                      updateTelefono(telefono.id, e.target.value);
-                      setErrors((prev) => ({ ...prev, [`telefono-${idx}`]: "" }));
+                    onChange={(event) => {
+                      updateTelefono(telefono.id, event.target.value);
+                      setErrors((current) => ({ ...current, [`telefono-${index}`]: "" }));
                     }}
-                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                      errors[`telefono-${idx}`]
+                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      errors[`telefono-${index}`]
                         ? "border-red-300 focus:ring-red-500"
-                        : "border-gray-300 focus:ring-blue-500"
+                        : "border-gray-300 focus:ring-slate-500"
                     }`}
-                    placeholder="Inserisci il numero di telefono"
+                    placeholder="Numero di telefono"
                   />
-                  {errors[`telefono-${idx}`] && (
-                    <p className="text-red-600 text-sm mt-1">{errors[`telefono-${idx}`]}</p>
+                  {errors[`telefono-${index}`] && (
+                    <p className="text-red-600 text-sm mt-1">{errors[`telefono-${index}`]}</p>
                   )}
                 </div>
                 <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -314,7 +372,7 @@ export function ClienteForm() {
                     type="radio"
                     checked={telefono.principale}
                     onChange={() => setPrincipale(telefono.id)}
-                    className="w-4 h-4 text-blue-600"
+                    className="w-4 h-4 accent-slate-900"
                   />
                   Principale
                 </label>
@@ -322,7 +380,7 @@ export function ClienteForm() {
                   <button
                     type="button"
                     onClick={() => removeTelefono(telefono.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2 text-gray-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -332,17 +390,17 @@ export function ClienteForm() {
           </div>
         </div>
 
-        <div className="flex gap-3 justify-end">
+        <div className="flex justify-center gap-3">
           <button
             type="button"
             onClick={() => navigate("/clienti")}
-            className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
           >
             Annulla
           </button>
           <button
             type="submit"
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-6 py-2 bg-slate-900 text-white rounded-md hover:bg-slate-800 transition-colors"
           >
             {isEdit ? "Salva modifiche" : "Crea cliente"}
           </button>

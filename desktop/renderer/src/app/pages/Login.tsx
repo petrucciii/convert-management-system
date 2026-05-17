@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useApp } from "../context/AppContext";
-import { Eye, EyeOff, Building2 } from "lucide-react";
+import { Building2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 export function Login() {
@@ -10,17 +10,19 @@ export function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Prima validazione lato client, poi login AJAX con fallback locale admin/admin.
     const newErrors: { username?: string; password?: string } = {};
     if (!username.trim()) {
-      newErrors.username = "Il campo username è obbligatorio";
+      newErrors.username = "Il campo username e obbligatorio";
     }
     if (!password.trim()) {
-      newErrors.password = "Il campo password è obbligatorio";
+      newErrors.password = "Il campo password e obbligatorio";
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -28,7 +30,10 @@ export function Login() {
       return;
     }
 
-    const success = login(username, password);
+    setIsSubmitting(true);
+    const success = await login(username, password);
+    setIsSubmitting(false);
+
     if (success) {
       toast.success("Accesso effettuato con successo");
       navigate("/");
@@ -39,11 +44,11 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
           <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center mb-4">
+            <div className="w-16 h-16 bg-slate-900 rounded-lg flex items-center justify-center mb-4">
               <Building2 className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-semibold text-gray-900">Gestionale Aziendale</h1>
@@ -66,7 +71,7 @@ export function Login() {
                 className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
                   errors.username
                     ? "border-red-300 focus:ring-red-500"
-                    : "border-gray-300 focus:ring-blue-500"
+                    : "border-gray-300 focus:ring-slate-500"
                 }`}
                 placeholder="Inserisci il tuo username"
               />
@@ -89,7 +94,7 @@ export function Login() {
                   className={`w-full px-4 py-3 pr-12 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
                     errors.password
                       ? "border-red-300 focus:ring-red-500"
-                      : "border-gray-300 focus:ring-blue-500"
+                      : "border-gray-300 focus:ring-slate-500"
                   }`}
                   placeholder="Inserisci la tua password"
                 />
@@ -106,16 +111,17 @@ export function Login() {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              disabled={isSubmitting}
+              className="w-full bg-slate-900 text-white py-3 rounded-lg hover:bg-slate-800 disabled:opacity-60 transition-colors font-medium"
             >
-              Accedi
+              {isSubmitting ? "Accesso..." : "Accedi"}
             </button>
           </form>
 
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-900 font-medium mb-1">Credenziali di test:</p>
-            <p className="text-sm text-blue-700">Username: admin</p>
-            <p className="text-sm text-blue-700">Password: admin</p>
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <p className="text-sm text-gray-900 font-medium mb-1">Credenziali di test:</p>
+            <p className="text-sm text-gray-700">Username: admin</p>
+            <p className="text-sm text-gray-700">Password: admin</p>
           </div>
         </div>
       </div>

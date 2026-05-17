@@ -1,144 +1,144 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { useApp } from "../context/AppContext";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { format } from "date-fns";
-import { it } from "date-fns/locale";
-import { TrendingUp, Users, ShoppingCart, Package } from "lucide-react";
+
+type ZoneKey = "paese" | "regione";
 
 export function Statistiche() {
-  const { ordini, clienti, modelli, getCliente, getModello } = useApp();
-  const currentYear = new Date().getFullYear();
-
-  const [selectedYear, setSelectedYear] = useState(currentYear.toString());
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [selectedModello, setSelectedModello] = useState("");
+  const { ordini, modelli, getCliente, getModello } = useApp();
+  const currentYear = new Date().getFullYear().toString();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
 
   const years = useMemo(() => {
-    const yearsSet = new Set<string>();
-    ordini.forEach((o) => {
-      yearsSet.add(new Date(o.dataOrdine).getFullYear().toString());
+    const yearsSet = new Set<string>([currentYear]);
+    ordini.forEach((ordine) => {
+      yearsSet.add(new Date(ordine.dataOrdine).getFullYear().toString());
     });
     return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
-  }, [ordini]);
+  }, [currentYear, ordini]);
 
   const filteredOrdini = useMemo(() => {
-    let result = [...ordini];
-
-    if (selectedYear) {
-      result = result.filter((o) => {
-        return new Date(o.dataOrdine).getFullYear().toString() === selectedYear;
-      });
+    if (!selectedYear) {
+      return ordini;
     }
 
-    if (dateFrom) {
-      result = result.filter((o) => {
-        return new Date(o.dataOrdine) >= new Date(dateFrom);
-      });
-    }
+    return ordini.filter(
+      (ordine) => new Date(ordine.dataOrdine).getFullYear().toString() === selectedYear
+    );
+  }, [ordini, selectedYear]);
 
-    if (dateTo) {
-      result = result.filter((o) => {
-        return new Date(o.dataOrdine) <= new Date(dateTo);
-      });
-    }
+  const topModelli = useMemo(() => {
+    const counts = filteredOrdini.reduce<Record<string, number>>((acc, ordine) => {
+      acc[ordine.modelloId] = (acc[ordine.modelloId] || 0) + 1;
+      return acc;
+    }, {});
 
-    if (selectedModello) {
-      result = result.filter((o) => o.modelloId === selectedModello);
-    }
-
-    return result;
-  }, [ordini, selectedYear, dateFrom, dateTo, selectedModello]);
-
-  const ordiniPerMese = useMemo(() => {
-    const mesi = [
-      "Gen",
-      "Feb",
-      "Mar",
-      "Apr",
-      "Mag",
-      "Giu",
-      "Lug",
-      "Ago",
-      "Set",
-      "Ott",
-      "Nov",
-      "Dic",
-    ];
-    const counts = new Array(12).fill(0);
-
-    filteredOrdini.forEach((ordine) => {
-      const mese = new Date(ordine.dataOrdine).getMonth();
-      counts[mese]++;
-    });
-
-    return mesi.map((mese, idx) => ({
-      mese,
-      ordini: counts[idx],
-    }));
-  }, [filteredOrdini]);
-
-  const modelliPiuOrdinati = useMemo(() => {
-    const counts: Record<string, number> = {};
-
-    filteredOrdini.forEach((ordine) => {
-      counts[ordine.modelloId] = (counts[ordine.modelloId] || 0) + 1;
-    });
-
+    // Top 3 ordinato: un solo grafico leggibile invece di tanti chart piccoli.
     return Object.entries(counts)
-      .map(([modelloId, count]) => {
-        const modello = getModello(modelloId);
-        return {
-          nome: modello?.nome || "N/A",
-          ordini: count,
-        };
-      })
+      .map(([modelloId, ordiniCount]) => ({
+        nome: getModello(modelloId)?.nome || "Senza nome",
+        ordini: ordiniCount,
+      }))
       .sort((a, b) => b.ordini - a.ordini)
-      .slice(0, 5);
+      .slice(0, 3);
   }, [filteredOrdini, getModello]);
 
-  const clientiConPiuOrdini = useMemo(() => {
-    const counts: Record<string, number> = {};
+  const buildZoneStats = (key: ZoneKey) => {
+    const zones = filteredOrdini.reduce<
+      Record<string, { nome: string; ordini: number; clienti: Set<string> }>
+    >((acc, ordine) => {
+      const cliente = getCliente(ordine.clienteId);
+      const zoneName = cliente?.[key] || "Non indicato";
 
-    filteredOrdini.forEach((ordine) => {
-      counts[ordine.clienteId] = (counts[ordine.clienteId] || 0) + 1;
-    });
+      if (!acc[zoneName]) {
+        acc[zoneName] = { nome: zoneName, ordini: 0, clienti: new Set<string>() };
+      }
 
-    return Object.entries(counts)
-      .map(([clienteId, count]) => {
-        const cliente = getCliente(clienteId);
-        return {
-          nome: cliente ? `${cliente.nome} ${cliente.cognome}` : "N/A",
-          ordini: count,
-        };
-      })
-      .sort((a, b) => b.ordini - a.ordini)
-      .slice(0, 5);
-  }, [filteredOrdini, getCliente]);
+      acc[zoneName].ordini += 1;
+      if (cliente) {
+        acc[zoneName].clienti.add(cliente.id);
+      }
 
-  const modelloPiuRichiesto = useMemo(() => {
-    if (modelliPiuOrdinati.length === 0) return "N/A";
-    return modelliPiuOrdinati[0].nome;
-  }, [modelliPiuOrdinati]);
+      return acc;
+    }, {});
 
-  const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
+    return Object.values(zones)
+      .map((zone) => ({
+        nome: zone.nome,
+        ordini: zone.ordini,
+        clienti: zone.clienti.size,
+      }))
+      .sort((a, b) => b.ordini - a.ordini);
+  };
+
+  const paeseStats = useMemo(() => buildZoneStats("paese"), [filteredOrdini, getCliente]);
+  const regioneStats = useMemo(() => buildZoneStats("regione"), [filteredOrdini, getCliente]);
+
+  const modelloPiuRichiesto = topModelli[0]?.nome || "N/A";
+
+  const ZoneTable = ({
+    title,
+    rows,
+  }: {
+    title: string;
+    rows: Array<{ nome: string; ordini: number; clienti: number }>;
+  }) => (
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+      <div className="px-5 py-4 border-b border-gray-200">
+        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">Zona</th>
+              <th className="text-right py-3 px-5 text-sm font-medium text-gray-700">Ordini</th>
+              <th className="text-right py-3 px-5 text-sm font-medium text-gray-700">Clienti</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.nome} className="border-b border-gray-100">
+                <td className="py-3 px-5 text-sm text-gray-900">{row.nome}</td>
+                <td className="py-3 px-5 text-sm text-gray-700 text-right">{row.ordini}</td>
+                <td className="py-3 px-5 text-sm text-gray-700 text-right">{row.clienti}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {rows.length === 0 && (
+          <div className="py-10 text-center text-gray-500">Nessun dato disponibile</div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="p-8">
       <div className="mb-8">
         <h1 className="text-3xl font-semibold text-gray-900">Statistiche</h1>
-        <p className="text-gray-600 mt-1">Analisi e report dei dati aziendali</p>
+        <p className="text-gray-600 mt-1">
+          Modelli ordinati e distribuzione geografica, filtrati per anno.
+        </p>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Filtri</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-5 items-end">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Anno</label>
             <select
               value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(event) => setSelectedYear(event.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
             >
               <option value="">Tutti</option>
               {years.map((year) => (
@@ -149,181 +149,60 @@ export function Statistiche() {
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Data da</label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Data a</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Modello</label>
-            <select
-              value={selectedModello}
-              onChange={(e) => setSelectedModello(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Tutti</option>
-              {modelli.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.nome}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="border-l border-gray-200 pl-4">
+              <p className="text-sm text-gray-500">Ordini filtrati</p>
+              <p className="text-2xl font-semibold text-gray-900">{filteredOrdini.length}</p>
+            </div>
+            <div className="border-l border-gray-200 pl-4">
+              <p className="text-sm text-gray-500">Modelli totali</p>
+              <p className="text-2xl font-semibold text-gray-900">{modelli.length}</p>
+            </div>
+            <div className="border-l border-gray-200 pl-4">
+              <p className="text-sm text-gray-500">Modello piu richiesto</p>
+              <p className="text-xl font-semibold text-gray-900">{modelloPiuRichiesto}</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <ShoppingCart className="w-6 h-6 text-blue-600" />
-            </div>
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
+        <div className="flex items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Top 3 modelli ordinati</h2>
+            <p className="text-sm text-gray-600">
+              {selectedYear ? `Anno ${selectedYear}` : "Tutti gli anni"}
+            </p>
           </div>
-          <p className="text-gray-600 text-sm">Totale ordini</p>
-          <p className="text-3xl font-semibold text-gray-900 mt-1">{filteredOrdini.length}</p>
         </div>
 
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-          <p className="text-gray-600 text-sm">Totale clienti</p>
-          <p className="text-3xl font-semibold text-gray-900 mt-1">{clienti.length}</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-          <p className="text-gray-600 text-sm">
-            {selectedYear ? `Ordini ${selectedYear}` : "Ordini totali"}
-          </p>
-          <p className="text-3xl font-semibold text-gray-900 mt-1">{filteredOrdini.length}</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-              <Package className="w-6 h-6 text-orange-600" />
-            </div>
-          </div>
-          <p className="text-gray-600 text-sm">Modello più richiesto</p>
-          <p className="text-lg font-semibold text-gray-900 mt-1">{modelloPiuRichiesto}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Ordini per mese</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={ordiniPerMese}>
+        {topModelli.length > 0 ? (
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={topModelli}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="mese" tick={{ fill: "#6b7280" }} />
-              <YAxis tick={{ fill: "#6b7280" }} />
+              <XAxis dataKey="nome" tick={{ fill: "#4b5563" }} />
+              <YAxis allowDecimals={false} tick={{ fill: "#4b5563" }} />
               <Tooltip
+                cursor={{ fill: "#f3f4f6" }}
                 contentStyle={{
                   backgroundColor: "#fff",
                   border: "1px solid #e5e7eb",
                   borderRadius: "8px",
                 }}
               />
-              <Bar dataKey="ordini" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="ordini" fill="#334155" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Modelli più ordinati</h2>
-          {modelliPiuOrdinati.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={modelliPiuOrdinati}
-                  dataKey="ordini"
-                  nameKey="nome"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  label={(entry) => `${entry.nome}: ${entry.ordini}`}
-                >
-                  {modelliPiuOrdinati.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-gray-500 text-center py-12">Nessun dato disponibile</p>
-          )}
-        </div>
+        ) : (
+          <div className="h-72 flex items-center justify-center text-gray-500">
+            Nessun dato disponibile
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Top 5 modelli</h2>
-          <div className="space-y-3">
-            {modelliPiuOrdinati.map((modello, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center font-semibold">
-                    {idx + 1}
-                  </div>
-                  <p className="font-medium text-gray-900">{modello.nome}</p>
-                </div>
-                <p className="text-gray-600 font-semibold">{modello.ordini} ordini</p>
-              </div>
-            ))}
-            {modelliPiuOrdinati.length === 0 && (
-              <p className="text-gray-500 text-center py-8">Nessun dato disponibile</p>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Top 5 clienti</h2>
-          <div className="space-y-3">
-            {clientiConPiuOrdini.map((cliente, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-green-100 text-green-700 rounded-lg flex items-center justify-center font-semibold">
-                    {idx + 1}
-                  </div>
-                  <p className="font-medium text-gray-900">{cliente.nome}</p>
-                </div>
-                <p className="text-gray-600 font-semibold">{cliente.ordini} ordini</p>
-              </div>
-            ))}
-            {clientiConPiuOrdini.length === 0 && (
-              <p className="text-gray-500 text-center py-8">Nessun dato disponibile</p>
-            )}
-          </div>
-        </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <ZoneTable title="Statistiche per paese" rows={paeseStats} />
+        <ZoneTable title="Statistiche per regione" rows={regioneStats} />
       </div>
     </div>
   );

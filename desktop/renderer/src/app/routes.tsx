@@ -1,6 +1,5 @@
 import { createBrowserRouter } from "react-router";
 import { Login } from "./pages/Login";
-import { Dashboard } from "./pages/Dashboard";
 import { Clienti } from "./pages/Clienti";
 import { ClienteDetail } from "./pages/ClienteDetail";
 import { ClienteForm } from "./pages/ClienteForm";
@@ -19,7 +18,7 @@ export const router = createBrowserRouter([
     path: "/",
     element: <ProtectedRoute><MainLayout /></ProtectedRoute>,
     children: [
-      { index: true, Component: Dashboard },
+      { index: true, Component: Clienti },
       { path: "clienti", Component: Clienti },
       { path: "clienti/nuovo", Component: ClienteForm },
       { path: "clienti/:id", Component: ClienteDetail },

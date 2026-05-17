@@ -1,74 +1,74 @@
-import { Outlet, useNavigate, useLocation } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
+import { BarChart3, Database, LogOut, Users } from "lucide-react";
 import { useApp } from "../context/AppContext";
-import {
-  Users,
-  BarChart3,
-  Database,
-  LogOut,
-  LayoutDashboard,
-} from "lucide-react";
 
 export function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useApp();
 
+  const navItems = [
+    { path: "/", label: "Clienti", icon: Users, match: ["/", "/clienti"] },
+    { path: "/statistiche", label: "Statistiche", icon: BarChart3, match: ["/statistiche"] },
+    { path: "/dizionario", label: "Tabelle", icon: Database, match: ["/dizionario"] },
+  ];
+
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
 
-  const navItems = [
-    { path: "/", label: "Dashboard", icon: LayoutDashboard },
-    { path: "/clienti", label: "Clienti", icon: Users },
-    { path: "/statistiche", label: "Statistiche", icon: BarChart3 },
-    { path: "/dizionario", label: "Tabelle dizionario", icon: Database },
-  ];
-
-  const isActive = (path: string) => {
-    if (path === "/") {
-      return location.pathname === "/";
-    }
-    return location.pathname.startsWith(path);
+  const isActive = (matches: string[]) => {
+    return matches.some((path) =>
+      path === "/"
+        ? location.pathname === "/" || location.pathname.startsWith("/clienti")
+        : location.pathname.startsWith(path)
+    );
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-6 border-b border-gray-200">
-          <h1 className="text-xl font-semibold text-gray-900">Gestionale Aziendale</h1>
-        </div>
+    <div className="min-h-screen bg-gray-100 text-gray-900 flex flex-col">
+      {/* Navbar superiore: sostituisce la vecchia sidebar e lascia piu spazio alle tabelle. */}
+      <header className="bg-white border-b border-gray-200">
+        <div className="h-16 px-6 flex items-center justify-between gap-6">
+          <div className="shrink-0">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Gestionale</p>
+            <h1 className="text-xl font-semibold text-gray-950 leading-tight">Convert</h1>
+          </div>
 
-        <nav className="flex-1 p-4 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  isActive(item.path)
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+          <nav className="flex flex-1 items-center gap-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(item.match);
 
-        <div className="p-4 border-t border-gray-200">
+              return (
+                <button
+                  key={item.path}
+                  type="button"
+                  onClick={() => navigate(item.path)}
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-md transition-colors ${
+                    active
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-950"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
           <button
+            type="button"
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4 h-4" />
             <span>Logout</span>
           </button>
         </div>
-      </aside>
+      </header>
 
       <main className="flex-1 overflow-auto">
         <Outlet />

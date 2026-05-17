@@ -1,4 +1,13 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { gestionaleApi } from "../services/api";
 
 export interface Telefono {
   id: string;
@@ -13,7 +22,11 @@ export interface Cliente {
   partitaIva: string;
   codiceFiscale: string;
   dataNascita: string;
-  indirizzo: string;
+  via: string;
+  paese: string;
+  provincia: string;
+  cap: string;
+  regione: string;
   telefoni: Telefono[];
   dataUltimoOrdine?: string;
 }
@@ -22,7 +35,18 @@ export interface Modello {
   id: string;
   nome: string;
   descrizione?: string;
-  attivo: boolean;
+}
+
+export type TipoAllegato = "fattura" | "ordine" | "altro";
+
+export interface AllegatoOrdine {
+  id: string;
+  nome: string;
+  tipo: TipoAllegato;
+  mimeType?: string;
+  dimensione?: number;
+  url?: string;
+  file?: File;
 }
 
 export interface Ordine {
@@ -31,19 +55,19 @@ export interface Ordine {
   dataOrdine: string;
   modelloId: string;
   secondaPersonaId?: string;
-  allegatoFattura?: string;
-  allegatoOrdine?: string;
+  allegati: AllegatoOrdine[];
 }
 
 interface AppContextType {
   isAuthenticated: boolean;
-  login: (username: string, password: string) => boolean;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   clienti: Cliente[];
   addCliente: (cliente: Omit<Cliente, "id">) => void;
   updateCliente: (id: string, cliente: Omit<Cliente, "id">) => void;
   deleteCliente: (id: string) => void;
   getCliente: (id: string) => Cliente | undefined;
+  getNumeroOrdiniCliente: (clienteId: string) => number;
   modelli: Modello[];
   addModello: (modello: Omit<Modello, "id">) => void;
   updateModello: (id: string, modello: Omit<Modello, "id">) => void;
@@ -59,6 +83,39 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+function createId(prefix: string) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}`;
+}
+
+function makeDemoAttachment(id: string, nome: string, tipo: TipoAllegato): AllegatoOrdine {
+  const body = encodeURIComponent(`Documento demo: ${nome}`);
+
+  return {
+    id,
+    nome,
+    tipo,
+    mimeType: "text/plain",
+    dimensione: body.length,
+    url: `data:text/plain;charset=utf-8,${body}`,
+  };
+}
+
+function getLatestOrderDate(clienteId: string, orders: Ordine[]) {
+  const timestamps = orders
+    .filter((ordine) => ordine.clienteId === clienteId || ordine.secondaPersonaId === clienteId)
+    .map((ordine) => new Date(ordine.dataOrdine).getTime());
+
+  if (timestamps.length === 0) {
+    return undefined;
+  }
+
+  return new Date(Math.max(...timestamps)).toISOString().split("T")[0];
+}
+
 const mockClienti: Cliente[] = [
   {
     id: "1",
@@ -67,7 +124,11 @@ const mockClienti: Cliente[] = [
     partitaIva: "12345678901",
     codiceFiscale: "RSSMRA80A01H501U",
     dataNascita: "1980-01-01",
-    indirizzo: "Via Roma 1, Milano",
+    via: "Via Roma 1",
+    paese: "Milano",
+    provincia: "MI",
+    cap: "20121",
+    regione: "Lombardia",
     telefoni: [
       { id: "t1", numero: "+39 333 1234567", principale: true },
       { id: "t2", numero: "+39 02 12345678", principale: false },
@@ -81,7 +142,11 @@ const mockClienti: Cliente[] = [
     partitaIva: "98765432109",
     codiceFiscale: "BNCLRA85B41F205X",
     dataNascita: "1985-02-01",
-    indirizzo: "Corso Italia 45, Roma",
+    via: "Corso Italia 45",
+    paese: "Roma",
+    provincia: "RM",
+    cap: "00198",
+    regione: "Lazio",
     telefoni: [{ id: "t3", numero: "+39 340 9876543", principale: true }],
     dataUltimoOrdine: "2026-04-25",
   },
@@ -92,17 +157,21 @@ const mockClienti: Cliente[] = [
     partitaIva: "11223344556",
     codiceFiscale: "VRDGPP75C15L219P",
     dataNascita: "1975-03-15",
-    indirizzo: "Piazza Garibaldi 10, Torino",
+    via: "Piazza Garibaldi 10",
+    paese: "Torino",
+    provincia: "TO",
+    cap: "10122",
+    regione: "Piemonte",
     telefoni: [{ id: "t4", numero: "+39 348 5551234", principale: true }],
     dataUltimoOrdine: "2026-03-12",
   },
 ];
 
 const mockModelli: Modello[] = [
-  { id: "m1", nome: "Modello Alpha", descrizione: "Modello base standard", attivo: true },
-  { id: "m2", nome: "Modello Beta", descrizione: "Modello premium", attivo: true },
-  { id: "m3", nome: "Modello Gamma", descrizione: "Modello deluxe", attivo: true },
-  { id: "m4", nome: "Modello Delta", descrizione: "Modello discontinuato", attivo: false },
+  { id: "m1", nome: "Modello Alpha", descrizione: "Modello base standard" },
+  { id: "m2", nome: "Modello Beta", descrizione: "Modello premium" },
+  { id: "m3", nome: "Modello Gamma", descrizione: "Modello deluxe" },
+  { id: "m4", nome: "Modello Delta", descrizione: "Modello storico" },
 ];
 
 const mockOrdini: Ordine[] = [
@@ -111,8 +180,10 @@ const mockOrdini: Ordine[] = [
     clienteId: "1",
     dataOrdine: "2026-05-10",
     modelloId: "m1",
-    allegatoFattura: "fattura_001.pdf",
-    allegatoOrdine: "ordine_001.pdf",
+    allegati: [
+      makeDemoAttachment("a1", "fattura_001.pdf", "fattura"),
+      makeDemoAttachment("a2", "ordine_001.pdf", "ordine"),
+    ],
   },
   {
     id: "o2",
@@ -120,29 +191,31 @@ const mockOrdini: Ordine[] = [
     dataOrdine: "2026-03-15",
     modelloId: "m2",
     secondaPersonaId: "2",
-    allegatoFattura: "fattura_002.pdf",
+    allegati: [makeDemoAttachment("a3", "fattura_002.pdf", "fattura")],
   },
   {
     id: "o3",
     clienteId: "2",
     dataOrdine: "2026-04-25",
     modelloId: "m1",
-    allegatoOrdine: "ordine_003.pdf",
+    allegati: [makeDemoAttachment("a4", "ordine_003.pdf", "ordine")],
   },
   {
     id: "o4",
     clienteId: "3",
     dataOrdine: "2026-03-12",
     modelloId: "m3",
-    allegatoFattura: "fattura_004.pdf",
-    allegatoOrdine: "ordine_004.pdf",
+    allegati: [
+      makeDemoAttachment("a5", "fattura_004.pdf", "fattura"),
+      makeDemoAttachment("a6", "ordine_004.pdf", "ordine"),
+    ],
   },
   {
     id: "o5",
     clienteId: "1",
     dataOrdine: "2026-01-20",
     modelloId: "m2",
-    allegatoFattura: "fattura_005.pdf",
+    allegati: [makeDemoAttachment("a7", "fattura_005.pdf", "fattura")],
   },
 ];
 
@@ -151,12 +224,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [clienti, setClienti] = useState<Cliente[]>(mockClienti);
   const [modelli, setModelli] = useState<Modello[]>(mockModelli);
   const [ordini, setOrdini] = useState<Ordine[]>(mockOrdini);
+  const [remoteOrdiniCount, setRemoteOrdiniCount] = useState<Record<string, number>>({});
 
-  const login = (username: string, password: string) => {
+  // Caricamento AJAX iniziale: quando Laravel risponde, sostituisce i dati mock.
+  useEffect(() => {
+    let isMounted = true;
+
+    void Promise.all([
+      gestionaleApi.fetchClienti(),
+      gestionaleApi.fetchModelli(),
+      gestionaleApi.fetchOrdini(),
+      gestionaleApi.fetchOrdiniCountByCliente(),
+    ]).then(([apiClienti, apiModelli, apiOrdini, apiCounts]) => {
+      if (!isMounted) {
+        return;
+      }
+
+      if (apiClienti) setClienti(apiClienti);
+      if (apiModelli) setModelli(apiModelli);
+      if (apiOrdini) setOrdini(apiOrdini);
+      if (apiCounts) setRemoteOrdiniCount(apiCounts);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const localOrdiniCount = useMemo(() => {
+    return ordini.reduce<Record<string, number>>((acc, ordine) => {
+      acc[ordine.clienteId] = (acc[ordine.clienteId] || 0) + 1;
+      if (ordine.secondaPersonaId) {
+        acc[ordine.secondaPersonaId] = (acc[ordine.secondaPersonaId] || 0) + 1;
+      }
+      return acc;
+    }, {});
+  }, [ordini]);
+
+  const login = async (username: string, password: string) => {
+    const apiResponse = await gestionaleApi.login(username, password);
+
+    if (apiResponse?.authenticated) {
+      setIsAuthenticated(true);
+      return true;
+    }
+
+    // Fallback locale utile finche non e collegato il backend Laravel.
     if (username === "admin" && password === "admin") {
       setIsAuthenticated(true);
       return true;
     }
+
     return false;
   };
 
@@ -165,71 +283,167 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addCliente = (cliente: Omit<Cliente, "id">) => {
-    const newCliente = { ...cliente, id: Date.now().toString() };
-    setClienti([...clienti, newCliente]);
+    const tempCliente = { ...cliente, id: createId("cliente") };
+    setClienti((current) => [...current, tempCliente]);
+
+    void gestionaleApi.createCliente(cliente).then((savedCliente) => {
+      if (savedCliente) {
+        setClienti((current) =>
+          current.map((item) => (item.id === tempCliente.id ? savedCliente : item))
+        );
+      }
+    });
   };
 
   const updateCliente = (id: string, cliente: Omit<Cliente, "id">) => {
-    setClienti(clienti.map((c) => (c.id === id ? { ...cliente, id } : c)));
+    setClienti((current) => current.map((item) => (item.id === id ? { ...cliente, id } : item)));
+
+    void gestionaleApi.updateCliente(id, cliente).then((savedCliente) => {
+      if (savedCliente) {
+        setClienti((current) => current.map((item) => (item.id === id ? savedCliente : item)));
+      }
+    });
   };
 
   const deleteCliente = (id: string) => {
-    setClienti(clienti.filter((c) => c.id !== id));
-    setOrdini(ordini.filter((o) => o.clienteId !== id && o.secondaPersonaId !== id));
+    setClienti((current) => current.filter((cliente) => cliente.id !== id));
+    setOrdini((current) =>
+      current.filter((ordine) => ordine.clienteId !== id && ordine.secondaPersonaId !== id)
+    );
+    setRemoteOrdiniCount({});
+
+    void gestionaleApi.deleteCliente(id);
   };
 
-  const getCliente = (id: string) => {
-    return clienti.find((c) => c.id === id);
-  };
+  const getCliente = useCallback(
+    (id: string) => {
+      return clienti.find((cliente) => cliente.id === id);
+    },
+    [clienti]
+  );
+
+  const getNumeroOrdiniCliente = useCallback(
+    (clienteId: string) => {
+      return remoteOrdiniCount[clienteId] ?? localOrdiniCount[clienteId] ?? 0;
+    },
+    [localOrdiniCount, remoteOrdiniCount]
+  );
 
   const addModello = (modello: Omit<Modello, "id">) => {
-    const newModello = { ...modello, id: Date.now().toString() };
-    setModelli([...modelli, newModello]);
+    const tempModello = { ...modello, id: createId("modello") };
+    setModelli((current) => [...current, tempModello]);
+
+    void gestionaleApi.createModello(modello).then((savedModello) => {
+      if (savedModello) {
+        setModelli((current) =>
+          current.map((item) => (item.id === tempModello.id ? savedModello : item))
+        );
+      }
+    });
   };
 
   const updateModello = (id: string, modello: Omit<Modello, "id">) => {
-    setModelli(modelli.map((m) => (m.id === id ? { ...modello, id } : m)));
+    setModelli((current) => current.map((item) => (item.id === id ? { ...modello, id } : item)));
+
+    void gestionaleApi.updateModello(id, modello).then((savedModello) => {
+      if (savedModello) {
+        setModelli((current) => current.map((item) => (item.id === id ? savedModello : item)));
+      }
+    });
   };
 
   const deleteModello = (id: string) => {
-    const isUsed = ordini.some((o) => o.modelloId === id);
+    const isUsed = ordini.some((ordine) => ordine.modelloId === id);
     if (isUsed) {
       return false;
     }
-    setModelli(modelli.filter((m) => m.id !== id));
+
+    setModelli((current) => current.filter((modello) => modello.id !== id));
+    void gestionaleApi.deleteModello(id);
     return true;
   };
 
-  const getModello = (id: string) => {
-    return modelli.find((m) => m.id === id);
-  };
+  const getModello = useCallback(
+    (id: string) => {
+      return modelli.find((modello) => modello.id === id);
+    },
+    [modelli]
+  );
 
   const addOrdine = (ordine: Omit<Ordine, "id">) => {
-    const newOrdine = { ...ordine, id: Date.now().toString() };
-    setOrdini([...ordini, newOrdine]);
+    const tempOrdine = { ...ordine, id: createId("ordine") };
+    setOrdini((current) => [...current, tempOrdine]);
+    setRemoteOrdiniCount({});
 
-    setClienti(
-      clienti.map((c) =>
-        c.id === ordine.clienteId ? { ...c, dataUltimoOrdine: ordine.dataOrdine } : c
+    setClienti((current) =>
+      current.map((cliente) =>
+        cliente.id === ordine.clienteId
+          ? { ...cliente, dataUltimoOrdine: ordine.dataOrdine }
+          : cliente
       )
     );
+
+    void gestionaleApi.createOrdine(ordine).then((savedOrdine) => {
+      if (savedOrdine) {
+        setOrdini((current) =>
+          current.map((item) => (item.id === tempOrdine.id ? savedOrdine : item))
+        );
+      }
+    });
   };
 
   const updateOrdine = (id: string, ordine: Omit<Ordine, "id">) => {
-    setOrdini(ordini.map((o) => (o.id === id ? { ...ordine, id } : o)));
+    setOrdini((current) => current.map((item) => (item.id === id ? { ...ordine, id } : item)));
+    setRemoteOrdiniCount({});
+
+    setClienti((current) =>
+      current.map((cliente) =>
+        cliente.id === ordine.clienteId
+          ? { ...cliente, dataUltimoOrdine: ordine.dataOrdine }
+          : cliente
+      )
+    );
+
+    void gestionaleApi.updateOrdine(id, ordine).then((savedOrdine) => {
+      if (savedOrdine) {
+        setOrdini((current) => current.map((item) => (item.id === id ? savedOrdine : item)));
+      }
+    });
   };
 
   const deleteOrdine = (id: string) => {
-    setOrdini(ordini.filter((o) => o.id !== id));
+    setOrdini((current) => {
+      const nextOrdini = current.filter((ordine) => ordine.id !== id);
+
+      setClienti((currentClienti) =>
+        currentClienti.map((cliente) => ({
+          ...cliente,
+          dataUltimoOrdine: getLatestOrderDate(cliente.id, nextOrdini),
+        }))
+      );
+
+      return nextOrdini;
+    });
+    setRemoteOrdiniCount({});
+
+    void gestionaleApi.deleteOrdine(id);
   };
 
-  const getOrdine = (id: string) => {
-    return ordini.find((o) => o.id === id);
-  };
+  const getOrdine = useCallback(
+    (id: string) => {
+      return ordini.find((ordine) => ordine.id === id);
+    },
+    [ordini]
+  );
 
-  const getOrdiniByCliente = (clienteId: string) => {
-    return ordini.filter((o) => o.clienteId === clienteId || o.secondaPersonaId === clienteId);
-  };
+  const getOrdiniByCliente = useCallback(
+    (clienteId: string) => {
+      return ordini.filter(
+        (ordine) => ordine.clienteId === clienteId || ordine.secondaPersonaId === clienteId
+      );
+    },
+    [ordini]
+  );
 
   return (
     <AppContext.Provider
@@ -242,6 +456,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateCliente,
         deleteCliente,
         getCliente,
+        getNumeroOrdiniCliente,
         modelli,
         addModello,
         updateModello,

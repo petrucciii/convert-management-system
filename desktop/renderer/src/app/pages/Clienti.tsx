@@ -1,38 +1,48 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { useApp } from "../context/AppContext";
-import { Plus, Search, Eye, Edit, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Plus, Search, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
+import { useApp } from "../context/AppContext";
+
+type SortColumn = "nome" | "cognome" | "paese" | "dataUltimoOrdine" | "numOrdini";
+type SortOrder = "asc" | "desc";
 
 export function Clienti() {
   const navigate = useNavigate();
-  const { clienti, deleteCliente, getOrdiniByCliente } = useApp();
+  const { clienti, deleteCliente, getNumeroOrdiniCliente } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [yearFilter, setYearFilter] = useState("");
-  const [sortBy, setSortBy] = useState<"nome" | "cognome" | "dataUltimoOrdine" | "numOrdini">("nome");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [sortBy, setSortBy] = useState<SortColumn>("cognome");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const filteredAndSortedClienti = useMemo(() => {
     let result = [...clienti];
 
+    // Ricerca ampia sui dati anagrafici e sui nuovi campi indirizzo separati.
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      result = result.filter(
-        (c) =>
-          c.nome.toLowerCase().includes(term) ||
-          c.cognome.toLowerCase().includes(term) ||
-          c.partitaIva.toLowerCase().includes(term) ||
-          c.codiceFiscale.toLowerCase().includes(term)
+      result = result.filter((cliente) =>
+        [
+          cliente.nome,
+          cliente.cognome,
+          cliente.partitaIva,
+          cliente.codiceFiscale,
+          cliente.via,
+          cliente.paese,
+          cliente.provincia,
+          cliente.cap,
+          cliente.regione,
+        ].some((value) => value.toLowerCase().includes(term))
       );
     }
 
     if (yearFilter) {
-      result = result.filter((c) => {
-        if (!c.dataUltimoOrdine) return false;
-        return new Date(c.dataUltimoOrdine).getFullYear().toString() === yearFilter;
+      result = result.filter((cliente) => {
+        if (!cliente.dataUltimoOrdine) return false;
+        return new Date(cliente.dataUltimoOrdine).getFullYear().toString() === yearFilter;
       });
     }
 
@@ -43,15 +53,22 @@ export function Clienti() {
       if (sortBy === "nome") {
         compareA = a.nome.toLowerCase();
         compareB = b.nome.toLowerCase();
-      } else if (sortBy === "cognome") {
+      }
+      if (sortBy === "cognome") {
         compareA = a.cognome.toLowerCase();
         compareB = b.cognome.toLowerCase();
-      } else if (sortBy === "dataUltimoOrdine") {
+      }
+      if (sortBy === "paese") {
+        compareA = a.paese.toLowerCase();
+        compareB = b.paese.toLowerCase();
+      }
+      if (sortBy === "dataUltimoOrdine") {
         compareA = a.dataUltimoOrdine ? new Date(a.dataUltimoOrdine).getTime() : 0;
         compareB = b.dataUltimoOrdine ? new Date(b.dataUltimoOrdine).getTime() : 0;
-      } else if (sortBy === "numOrdini") {
-        compareA = getOrdiniByCliente(a.id).length;
-        compareB = getOrdiniByCliente(b.id).length;
+      }
+      if (sortBy === "numOrdini") {
+        compareA = getNumeroOrdiniCliente(a.id);
+        compareB = getNumeroOrdiniCliente(b.id);
       }
 
       if (compareA < compareB) return sortOrder === "asc" ? -1 : 1;
@@ -60,66 +77,102 @@ export function Clienti() {
     });
 
     return result;
-  }, [clienti, searchTerm, yearFilter, sortBy, sortOrder, getOrdiniByCliente]);
+  }, [clienti, getNumeroOrdiniCliente, searchTerm, sortBy, sortOrder, yearFilter]);
 
   const years = useMemo(() => {
     const yearsSet = new Set<string>();
-    clienti.forEach((c) => {
-      if (c.dataUltimoOrdine) {
-        yearsSet.add(new Date(c.dataUltimoOrdine).getFullYear().toString());
+    clienti.forEach((cliente) => {
+      if (cliente.dataUltimoOrdine) {
+        yearsSet.add(new Date(cliente.dataUltimoOrdine).getFullYear().toString());
       }
     });
     return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
   }, [clienti]);
 
-  const handleSort = (column: typeof sortBy) => {
+  const handleSort = (column: SortColumn) => {
     if (sortBy === column) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(column);
-      setSortOrder("asc");
+      setSortOrder((current) => (current === "asc" ? "desc" : "asc"));
+      return;
     }
+
+    setSortBy(column);
+    setSortOrder(column === "dataUltimoOrdine" || column === "numOrdini" ? "desc" : "asc");
   };
 
   const handleDelete = (id: string) => {
     deleteCliente(id);
     toast.success("Cliente eliminato con successo");
+    window.alert("Cliente eliminato con successo.");
     setDeleteId(null);
   };
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortBy !== column) {
+      return <ArrowUpDown className="w-4 h-4 text-gray-400" />;
+    }
+
+    return sortOrder === "asc" ? (
+      <ArrowUp className="w-4 h-4 text-gray-700" />
+    ) : (
+      <ArrowDown className="w-4 h-4 text-gray-700" />
+    );
+  };
+
+  const SortHeader = ({
+    column,
+    label,
+    className = "",
+  }: {
+    column: SortColumn;
+    label: string;
+    className?: string;
+  }) => (
+    <th className={`py-3 px-5 text-left text-sm font-medium text-gray-700 ${className}`}>
+      <button
+        type="button"
+        onClick={() => handleSort(column)}
+        className="inline-flex items-center gap-1.5 hover:text-gray-950"
+      >
+        {label}
+        <SortIcon column={column} />
+      </button>
+    </th>
+  );
 
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-semibold text-gray-900">Clienti</h1>
-          <p className="text-gray-600 mt-1">Gestisci tutti i tuoi clienti</p>
+          <p className="text-gray-600 mt-1">Lista anagrafica e stato ordini</p>
         </div>
         <button
+          type="button"
           onClick={() => navigate("/clienti/nuovo")}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-md hover:bg-slate-800 transition-colors"
         >
           <Plus className="w-5 h-5" />
           Aggiungi cliente
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex flex-col md:flex-row gap-4">
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div className="p-5 border-b border-gray-200">
+          <div className="flex flex-col md:flex-row gap-3">
             <div className="flex-1 relative">
               <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Cerca per nome, cognome, P.IVA o C.F."
+                placeholder="Cerca nome, cognome, CF, P.IVA, paese, provincia..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(event) => setSearchTerm(event.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
               />
             </div>
             <select
               value={yearFilter}
-              onChange={(e) => setYearFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(event) => setYearFilter(event.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
             >
               <option value="">Tutti gli anni</option>
               {years.map((year) => (
@@ -128,94 +181,73 @@ export function Clienti() {
                 </option>
               ))}
             </select>
-            <select
-              value={`${sortBy}-${sortOrder}`}
-              onChange={(e) => {
-                const [col, order] = e.target.value.split("-");
-                setSortBy(col as typeof sortBy);
-                setSortOrder(order as "asc" | "desc");
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="nome-asc">Nome (A-Z)</option>
-              <option value="nome-desc">Nome (Z-A)</option>
-              <option value="cognome-asc">Cognome (A-Z)</option>
-              <option value="cognome-desc">Cognome (Z-A)</option>
-              <option value="dataUltimoOrdine-desc">Ultimo ordine (recente)</option>
-              <option value="dataUltimoOrdine-asc">Ultimo ordine (vecchio)</option>
-              <option value="numOrdini-desc">N. ordini (maggiore)</option>
-              <option value="numOrdini-asc">N. ordini (minore)</option>
-            </select>
           </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left py-3 px-6 text-sm font-medium text-gray-700">Nome</th>
-                <th className="text-left py-3 px-6 text-sm font-medium text-gray-700">Cognome</th>
-                <th className="text-left py-3 px-6 text-sm font-medium text-gray-700">P. IVA</th>
-                <th className="text-left py-3 px-6 text-sm font-medium text-gray-700">C.F.</th>
-                <th className="text-left py-3 px-6 text-sm font-medium text-gray-700">
-                  Data nascita
+                <SortHeader column="cognome" label="Cognome" />
+                <SortHeader column="nome" label="Nome" />
+                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">CF</th>
+                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">P. IVA</th>
+                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">Via</th>
+                <SortHeader column="paese" label="Paese" />
+                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">
+                  Provincia
                 </th>
-                <th className="text-left py-3 px-6 text-sm font-medium text-gray-700">Indirizzo</th>
-                <th className="text-left py-3 px-6 text-sm font-medium text-gray-700">Telefono</th>
-                <th className="text-left py-3 px-6 text-sm font-medium text-gray-700">
-                  Ultimo ordine
+                <th className="text-left py-3 px-5 text-sm font-medium text-gray-700">CAP</th>
+                <SortHeader column="dataUltimoOrdine" label="Ultimo ordine" />
+                <SortHeader column="numOrdini" label="Ordini" />
+                <th className="text-right py-3 px-5 text-sm font-medium text-gray-700">
+                  Elimina
                 </th>
-                <th className="text-left py-3 px-6 text-sm font-medium text-gray-700">Azioni</th>
               </tr>
             </thead>
             <tbody>
               {filteredAndSortedClienti.map((cliente) => (
-                <tr key={cliente.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-4 px-6 text-sm text-gray-900">{cliente.nome}</td>
-                  <td className="py-4 px-6 text-sm text-gray-900">{cliente.cognome}</td>
-                  <td className="py-4 px-6 text-sm text-gray-600">{cliente.partitaIva}</td>
-                  <td className="py-4 px-6 text-sm text-gray-600">{cliente.codiceFiscale}</td>
-                  <td className="py-4 px-6 text-sm text-gray-600">
-                    {format(new Date(cliente.dataNascita), "dd/MM/yyyy")}
+                <tr
+                  key={cliente.id}
+                  onClick={() => navigate(`/clienti/${cliente.id}`)}
+                  className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                >
+                  <td className="py-4 px-5 text-sm text-gray-900 font-medium">
+                    {cliente.cognome}
                   </td>
-                  <td className="py-4 px-6 text-sm text-gray-600">{cliente.indirizzo}</td>
-                  <td className="py-4 px-6 text-sm text-gray-600">
-                    {cliente.telefoni.find((t) => t.principale)?.numero || "N/A"}
-                  </td>
-                  <td className="py-4 px-6 text-sm text-gray-600">
+                  <td className="py-4 px-5 text-sm text-gray-900">{cliente.nome}</td>
+                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.codiceFiscale}</td>
+                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.partitaIva}</td>
+                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.via}</td>
+                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.paese}</td>
+                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.provincia}</td>
+                  <td className="py-4 px-5 text-sm text-gray-600">{cliente.cap}</td>
+                  <td className="py-4 px-5 text-sm text-gray-600">
                     {cliente.dataUltimoOrdine
                       ? format(new Date(cliente.dataUltimoOrdine), "dd/MM/yyyy")
                       : "Mai"}
                   </td>
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => navigate(`/clienti/${cliente.id}`)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Visualizza"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => navigate(`/clienti/${cliente.id}/modifica`)}
-                        className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                        title="Modifica"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteId(cliente.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Elimina"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                  <td className="py-4 px-5 text-sm text-gray-900">
+                    {getNumeroOrdiniCliente(cliente.id)}
+                  </td>
+                  <td className="py-4 px-5 text-right">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDeleteId(cliente.id);
+                      }}
+                      className="p-2 text-gray-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                      title="Elimina cliente"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+
           {filteredAndSortedClienti.length === 0 && (
             <div className="py-12 text-center">
               <p className="text-gray-500">Nessun cliente trovato</p>
@@ -227,24 +259,24 @@ export function Clienti() {
       <AlertDialog.Root open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialog.Portal>
           <AlertDialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
-          <AlertDialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl p-6 w-full max-w-md z-50">
+          <AlertDialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-6 w-full max-w-md z-50">
             <AlertDialog.Title className="text-lg font-semibold text-gray-900 mb-2">
               Conferma eliminazione
             </AlertDialog.Title>
             <AlertDialog.Description className="text-gray-600 mb-6">
-              Sei sicuro di voler eliminare questo cliente? Tutti gli ordini associati verranno eliminati. Questa
-              azione non può essere annullata.
+              Sei sicuro di voler eliminare questo cliente? Anche gli ordini associati verranno
+              eliminati.
             </AlertDialog.Description>
             <div className="flex gap-3 justify-end">
               <AlertDialog.Cancel asChild>
-                <button className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                <button className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
                   Annulla
                 </button>
               </AlertDialog.Cancel>
               <AlertDialog.Action asChild>
                 <button
                   onClick={() => deleteId && handleDelete(deleteId)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  className="px-4 py-2 bg-red-700 text-white rounded-md hover:bg-red-800 transition-colors"
                 >
                   Elimina
                 </button>
